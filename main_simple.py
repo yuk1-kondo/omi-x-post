@@ -477,7 +477,8 @@ async def process_segments(
             segments_count=1
         )
         
-        return f"📝 Collecting segment 1/3..."
+        # Silent - don't notify user yet
+        return "collecting_1"
     
     # If in recording mode, collect more segments
     elif session["tweet_mode"] == "recording":
@@ -524,10 +525,11 @@ async def process_segments(
                 accumulated_text=accumulated,
                 segments_count=segments_count
             )
-            return f"📝 Collecting segment {segments_count}/3..."
+            # Silent - don't notify user yet
+            return f"collecting_{segments_count}"
     
-    # Passive listening
-    return "Listening..."
+    # Passive listening - silent
+    return "listening"
 
 
 @app.get("/test")
