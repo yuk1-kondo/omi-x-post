@@ -240,8 +240,8 @@ async def auth_callback(
             <html lang="en">
                 <head>
                     <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Connected to Twitter! 🎉</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+                    <title>Twitter • Account Connected</title>
                     <style>
                         * {
                             margin: 0;
@@ -250,268 +250,271 @@ async def auth_callback(
                         }
                         
                         body {
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                            background: #FFFFFF;
                             min-height: 100vh;
+                            display: flex;
+                            flex-direction: column;
+                        }
+                        
+                        .header {
+                            padding: 16px 20px;
+                            border-bottom: 1px solid #EFF3F4;
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            padding: 20px;
-                            position: relative;
-                            overflow: hidden;
                         }
                         
-                        /* Animated background */
-                        body::before {
-                            content: '';
-                            position: absolute;
-                            width: 200%;
-                            height: 200%;
-                            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-                            background-size: 50px 50px;
-                            animation: float 20s linear infinite;
-                        }
-                        
-                        @keyframes float {
-                            from { transform: translate(0, 0); }
-                            to { transform: translate(50px, 50px); }
+                        .twitter-logo {
+                            width: 32px;
+                            height: 32px;
+                            fill: #1D9BF0;
                         }
                         
                         .container {
-                            background: white;
-                            border-radius: 24px;
-                            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                            max-width: 500px;
+                            flex: 1;
+                            max-width: 600px;
                             width: 100%;
-                            padding: 48px 32px;
-                            text-align: center;
-                            position: relative;
-                            z-index: 1;
-                            animation: slideUp 0.5s ease-out;
+                            margin: 0 auto;
+                            padding: 32px 20px;
                         }
                         
-                        @keyframes slideUp {
-                            from {
-                                opacity: 0;
-                                transform: translateY(30px);
-                            }
-                            to {
-                                opacity: 1;
-                                transform: translateY(0);
-                            }
-                        }
-                        
-                        .success-icon {
-                            font-size: 80px;
-                            margin-bottom: 24px;
-                            animation: bounce 0.6s ease-out;
-                        }
-                        
-                        @keyframes bounce {
-                            0%, 100% { transform: scale(1); }
-                            50% { transform: scale(1.1); }
-                        }
-                        
-                        h1 {
-                            font-size: 32px;
-                            color: #1a1a1a;
-                            margin-bottom: 12px;
-                            font-weight: 700;
-                        }
-                        
-                        .subtitle {
-                            font-size: 18px;
-                            color: #666;
-                            margin-bottom: 32px;
-                            line-height: 1.5;
-                        }
-                        
-                        .badge {
-                            display: inline-flex;
-                            align-items: center;
-                            gap: 8px;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            padding: 10px 20px;
-                            border-radius: 50px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            margin-bottom: 32px;
-                        }
-                        
-                        .instruction-box {
-                            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                        .success-card {
+                            background: #FFFFFF;
+                            border: 1px solid #EFF3F4;
                             border-radius: 16px;
-                            padding: 24px;
-                            text-align: left;
-                            margin-top: 24px;
-                        }
-                        
-                        .instruction-title {
-                            font-size: 18px;
-                            font-weight: 700;
-                            color: #1a1a1a;
+                            padding: 32px 24px;
+                            text-align: center;
                             margin-bottom: 16px;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
                         }
                         
-                        .step {
-                            display: flex;
-                            align-items: flex-start;
-                            gap: 12px;
-                            margin-bottom: 16px;
-                            padding: 12px;
-                            background: white;
-                            border-radius: 12px;
-                        }
-                        
-                        .step:last-child {
-                            margin-bottom: 0;
-                        }
-                        
-                        .step-number {
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            width: 28px;
-                            height: 28px;
+                        .check-icon {
+                            width: 64px;
+                            height: 64px;
+                            background: #00BA7C;
                             border-radius: 50%;
                             display: flex;
                             align-items: center;
                             justify-content: center;
+                            margin: 0 auto 20px;
+                        }
+                        
+                        .check-icon svg {
+                            width: 32px;
+                            height: 32px;
+                            stroke: white;
+                            fill: none;
+                            stroke-width: 3;
+                        }
+                        
+                        h1 {
+                            font-size: 31px;
+                            font-weight: 800;
+                            color: #0F1419;
+                            margin-bottom: 8px;
+                            line-height: 1.2;
+                        }
+                        
+                        .subtitle {
+                            font-size: 17px;
+                            color: #536471;
+                            margin-bottom: 20px;
+                            font-weight: 400;
+                        }
+                        
+                        .info-card {
+                            background: #FFFFFF;
+                            border: 1px solid #EFF3F4;
+                            border-radius: 16px;
+                            padding: 20px;
+                            text-align: left;
+                            margin-bottom: 16px;
+                        }
+                        
+                        .info-title {
+                            font-size: 20px;
                             font-weight: 700;
-                            font-size: 14px;
+                            color: #0F1419;
+                            margin-bottom: 16px;
+                        }
+                        
+                        .step {
+                            display: flex;
+                            gap: 12px;
+                            margin-bottom: 16px;
+                            padding-bottom: 16px;
+                            border-bottom: 1px solid #EFF3F4;
+                        }
+                        
+                        .step:last-child {
+                            border-bottom: none;
+                            margin-bottom: 0;
+                            padding-bottom: 0;
+                        }
+                        
+                        .step-icon {
+                            font-size: 24px;
                             flex-shrink: 0;
                         }
                         
                         .step-content {
                             flex: 1;
-                            padding-top: 2px;
                         }
                         
                         .step-text {
-                            color: #1a1a1a;
+                            color: #0F1419;
+                            font-size: 15px;
+                            line-height: 1.5;
+                            font-weight: 400;
+                        }
+                        
+                        .step-text strong {
+                            font-weight: 700;
+                            color: #1D9BF0;
+                        }
+                        
+                        .example-card {
+                            background: #F7F9F9;
+                            border: 1px solid #EFF3F4;
+                            border-radius: 16px;
+                            padding: 20px;
+                            margin-bottom: 16px;
+                        }
+                        
+                        .example-label {
+                            font-size: 13px;
+                            font-weight: 700;
+                            color: #536471;
+                            margin-bottom: 12px;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        }
+                        
+                        .tweet-example {
+                            background: white;
+                            border: 1px solid #CFD9DE;
+                            border-radius: 12px;
+                            padding: 16px;
+                        }
+                        
+                        .tweet-text {
+                            color: #0F1419;
                             font-size: 15px;
                             line-height: 1.5;
                         }
                         
-                        .example {
-                            background: rgba(102, 126, 234, 0.1);
-                            border-left: 3px solid #667eea;
-                            padding: 16px;
-                            border-radius: 8px;
-                            margin-top: 24px;
-                            text-align: left;
+                        .tweet-meta {
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            margin-top: 12px;
+                            font-size: 13px;
+                            color: #536471;
                         }
                         
-                        .example-label {
-                            font-size: 12px;
-                            text-transform: uppercase;
-                            letter-spacing: 1px;
-                            color: #667eea;
-                            font-weight: 700;
-                            margin-bottom: 8px;
-                        }
-                        
-                        .example-text {
-                            font-size: 16px;
-                            color: #1a1a1a;
-                            font-style: italic;
-                            line-height: 1.6;
+                        .divider {
+                            height: 1px;
+                            background: #EFF3F4;
+                            margin: 24px 0;
                         }
                         
                         .footer {
-                            margin-top: 32px;
-                            padding-top: 24px;
-                            border-top: 1px solid #eee;
-                            font-size: 14px;
-                            color: #999;
+                            text-align: center;
+                            padding: 20px;
+                            font-size: 13px;
+                            color: #536471;
                         }
                         
-                        .emoji-wave {
-                            display: inline-block;
-                            animation: wave 2s ease-in-out infinite;
-                        }
-                        
-                        @keyframes wave {
-                            0%, 100% { transform: rotate(0deg); }
-                            25% { transform: rotate(20deg); }
-                            75% { transform: rotate(-20deg); }
+                        .footer a {
+                            color: #1D9BF0;
+                            text-decoration: none;
                         }
                         
                         @media (max-width: 600px) {
-                            body {
-                                padding: 16px;
+                            .container {
+                                padding: 24px 16px;
                             }
                             
-                            .container {
-                                padding: 32px 24px;
+                            .success-card,
+                            .info-card,
+                            .example-card {
+                                padding: 24px 16px;
                             }
                             
                             h1 {
-                                font-size: 26px;
+                                font-size: 27px;
                             }
                             
                             .subtitle {
-                                font-size: 16px;
-                            }
-                            
-                            .instruction-box {
-                                padding: 20px;
+                                font-size: 15px;
                             }
                         }
                     </style>
                 </head>
                 <body>
+                    <div class="header">
+                        <svg class="twitter-logo" viewBox="0 0 24 24" aria-hidden="true">
+                            <g><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></g>
+                        </svg>
+                    </div>
+                    
                     <div class="container">
-                        <div class="success-icon">🎉</div>
-                        <h1>You're All Set!</h1>
-                        <p class="subtitle">Your Twitter account is connected to OMI</p>
-                        
-                        <div class="badge">
-                            <span>✅</span>
-                            <span>Authentication Successful</span>
+                        <div class="success-card">
+                            <div class="check-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            </div>
+                            <h1>You're connected!</h1>
+                            <p class="subtitle">Your OMI device can now post tweets with your voice</p>
                         </div>
                         
-                        <div class="instruction-box">
-                            <div class="instruction-title">
-                                <span>🎤</span>
-                                <span>How to Tweet with Your Voice</span>
-                            </div>
+                        <div class="info-card">
+                            <div class="info-title">How to use</div>
                             
                             <div class="step">
-                                <div class="step-number">1</div>
+                                <div class="step-icon">🎤</div>
                                 <div class="step-content">
                                     <div class="step-text">Say <strong>"Tweet Now"</strong> to your OMI device</div>
                                 </div>
                             </div>
                             
                             <div class="step">
-                                <div class="step-number">2</div>
+                                <div class="step-icon">💬</div>
                                 <div class="step-content">
-                                    <div class="step-text">Speak your tweet naturally (we'll collect ~3 segments)</div>
+                                    <div class="step-text">Speak your message naturally</div>
                                 </div>
                             </div>
                             
                             <div class="step">
-                                <div class="step-number">3</div>
+                                <div class="step-icon">✨</div>
                                 <div class="step-content">
-                                    <div class="step-text">AI processes and posts your tweet automatically!</div>
+                                    <div class="step-text">AI cleans up your speech and posts it</div>
+                                </div>
+                            </div>
+                            
+                            <div class="step">
+                                <div class="step-icon">📲</div>
+                                <div class="step-content">
+                                    <div class="step-text">Get notified when your tweet is live!</div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="example">
-                            <div class="example-label">Example</div>
-                            <div class="example-text">
-                                "Tweet Now, I just had an incredible idea about voice-first social media!"
+                        <div class="example-card">
+                            <div class="example-label">Try saying</div>
+                            <div class="tweet-example">
+                                <div class="tweet-text">Tweet Now, I just had an incredible idea about voice-first social media!</div>
+                                <div class="tweet-meta">
+                                    <span>🤖</span>
+                                    <span>AI will clean and post this automatically</span>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div class="footer">
-                            <p>Made with ❤️ for OMI <span class="emoji-wave">👋</span></p>
-                        </div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Powered by <a href="https://omi.me" target="_blank">OMI</a> • Made with ❤️</p>
                     </div>
                 </body>
             </html>
