@@ -326,10 +326,10 @@ async def webhook(
     Real-time transcript webhook endpoint.
     Handles requests with or without session_id parameter.
     """
-    # Generate session_id if not provided by OMI
+    # Use consistent session_id per user (no timestamp!)
+    # This ensures session persists across all segments
     if not session_id:
-        import time
-        session_id = f"omi_{uid}_{int(time.time() * 1000)}"
+        session_id = f"omi_session_{uid}"
     
     # Get user
     user = SimpleUserStorage.get_user(uid)
