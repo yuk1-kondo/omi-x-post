@@ -114,6 +114,7 @@ class SimpleSessionStorage:
                 "accumulated_text": "",
                 "created_at": datetime.utcnow().isoformat()
             }
+            print(f"🆕 Created new session: {session_id}", flush=True)
         return sessions[session_id]
     
     @staticmethod
@@ -121,6 +122,9 @@ class SimpleSessionStorage:
         """Update session fields"""
         if session_id in sessions:
             sessions[session_id].update(kwargs)
+            print(f"💾 Updated session {session_id}: {kwargs}", flush=True)
+        else:
+            print(f"⚠️  Session {session_id} not found for update!", flush=True)
     
     @staticmethod
     def reset_session(session_id: str):
