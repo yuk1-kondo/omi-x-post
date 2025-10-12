@@ -427,16 +427,18 @@ async def webhook(
     # Process segments
     response_message = await process_segments(session, segments, user)
     
-    # Only return meaningful messages (not "Listening...")
-    if response_message and response_message != "Listening...":
-        print(f"✉️  Response: {response_message}")
+    # Only send notifications for final tweet post (success or failure)
+    # Silent responses during collection so user doesn't get spammed
+    if response_message and ("✅ Tweet posted:" in response_message or "❌ Failed:" in response_message):
+        print(f"✉️  USER NOTIFICATION: {response_message}", flush=True)
         return {
             "message": response_message,
             "session_id": session_id,
             "processed_segments": len(segments)
         }
     
-    # Silent response for passive listening
+    # Silent response for everything else (listening, collecting, etc.)
+    print(f"🔇 Silent response: {response_message}", flush=True)
     return {"status": "ok"}
 
 
