@@ -7,8 +7,16 @@ from datetime import datetime, timedelta
 import json
 import os
 
-# Storage file paths
-STORAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Storage file paths - use /app/data for Railway persistence
+STORAGE_DIR = os.getenv("STORAGE_DIR", os.path.dirname(os.path.abspath(__file__)))
+# Check if we're on Railway (has /app/data volume)
+if os.path.exists("/app/data"):
+    STORAGE_DIR = "/app/data"
+    print(f"📁 Using persistent storage at: /app/data", flush=True)
+else:
+    STORAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+    print(f"📁 Using local storage at: {STORAGE_DIR}", flush=True)
+
 USERS_FILE = os.path.join(STORAGE_DIR, "users_data.json")
 SESSIONS_FILE = os.path.join(STORAGE_DIR, "sessions_data.json")
 
