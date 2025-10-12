@@ -218,11 +218,20 @@ async def auth_callback(
         token_data, uid = twitter_client.get_access_token(full_url, state)
         
         # Save user tokens with expiration info
+        access_token = token_data.get('access_token')
+        refresh_token = token_data.get('refresh_token')
+        expires_in = token_data.get('expires_in', 7200)
+        
+        print(f"🔑 Token data received:", flush=True)
+        print(f"   Access token: {access_token[:20]}..." if access_token else "   Access token: None", flush=True)
+        print(f"   Refresh token: {refresh_token[:20]}..." if refresh_token else "   Refresh token: None", flush=True)
+        print(f"   Expires in: {expires_in}s ({expires_in/3600:.1f}h)", flush=True)
+        
         SimpleUserStorage.save_user(
             uid=uid,
-            access_token=token_data.get('access_token'),
-            refresh_token=token_data.get('refresh_token'),
-            expires_in=token_data.get('expires_in', 7200)  # Default 2 hours
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in
         )
         
         return HTMLResponse(

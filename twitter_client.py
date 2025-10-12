@@ -106,6 +106,11 @@ class TwitterClient:
         # Exchange code for token
         token_dict = oauth2_user_handler.fetch_token(authorization_response)
         
+        # Debug: Log what we got
+        print(f"📦 Token exchange result:", flush=True)
+        print(f"   Keys in token_dict: {list(token_dict.keys())}", flush=True)
+        print(f"   Has refresh_token: {'refresh_token' in token_dict}", flush=True)
+        
         # Clean up stored handler and mapping
         if state in self._oauth_handlers:
             del self._oauth_handlers[state]
