@@ -66,7 +66,7 @@ class TwitterClient:
         oauth2_user_handler = tweepy.OAuth2UserHandler(
             client_id=self.client_id,
             redirect_uri=redirect_uri,
-            scope=["tweet.read", "tweet.write", "users.read"],
+            scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
             client_secret=self.client_secret
         )
         
