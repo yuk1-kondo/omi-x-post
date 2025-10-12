@@ -4,6 +4,9 @@ import os
 from dotenv import load_dotenv
 from typing import List, Dict, Any
 
+# Fix for Railway/production: Allow OAuth over HTTP (Railway handles HTTPS at proxy)
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 from simple_storage import SimpleUserStorage, SimpleSessionStorage, OAuthStateStorage
 from twitter_client import TwitterClient
 from tweet_detector import TweetDetector
@@ -290,13 +293,14 @@ async def auth_callback(
         )
     
     except Exception as e:
+        error_uid = state if state else "unknown"
         return HTMLResponse(
             content=f"""
             <html>
                 <body style="font-family: Arial; padding: 40px; text-align: center;">
                     <h2>❌ Authentication Error</h2>
                     <p>Failed to complete authentication: {str(e)}</p>
-                    <p><a href="/auth?uid={uid}">Try again</a></p>
+                    <p><a href="/auth?uid={error_uid}">Try again</a></p>
                 </body>
             </html>
             """,
