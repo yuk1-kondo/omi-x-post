@@ -1,9 +1,9 @@
 [phases.setup]
-nixPkgs = ["python310", "pip"]
+nixPkgs = ["python310"]
 
 [phases.install]
-cmds = ["pip3 install -r requirements.txt"]
+cmds = ["python -m pip install --upgrade pip", "python -m pip install -r requirements.txt"]
 
 [start]
-cmd = "python3 main_simple.py"
+cmd = "python main_simple.py"
 
