@@ -466,7 +466,6 @@ async def auth_callback(
                                 </svg>
                             </div>
                             <h1>You're connected!</h1>
-                            <p class="subtitle">Your OMI device can now post tweets with your voice</p>
                         </div>
                         
                         <div class="info-card">
