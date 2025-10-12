@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: omi-twitter-integration
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: TWITTER_API_KEY
+        sync: false
+      - key: TWITTER_API_SECRET
+        sync: false
+      - key: TWITTER_CLIENT_ID
+        sync: false
+      - key: TWITTER_CLIENT_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OAUTH_REDIRECT_URL
+        value: https://your-app-name.onrender.com/auth/callback
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./twitter_omi.db
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: APP_PORT
+        fromService:
+          type: web
+          name: omi-twitter-integration
+          property: port
+

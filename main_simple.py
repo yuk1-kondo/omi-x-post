@@ -1,0 +1,864 @@
+from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+import os
+from dotenv import load_dotenv
+from typing import List, Dict, Any
+
+from simple_storage import SimpleUserStorage, SimpleSessionStorage, OAuthStateStorage
+from twitter_client import TwitterClient
+from tweet_detector import TweetDetector
+
+load_dotenv()
+
+# Initialize services
+twitter_client = TwitterClient()
+tweet_detector = TweetDetector()
+
+app = FastAPI(
+    title="OMI Twitter Integration",
+    description="Real-time Twitter posting via OMI voice commands",
+    version="1.0.0"
+)
+
+
+@app.get("/")
+async def root(uid: str = Query(None)):
+    """Root endpoint with setup instructions."""
+    # If uid provided, show personalized setup page
+    if uid:
+        auth_url = f"/auth?uid={uid}"
+        return HTMLResponse(content=f"""
+        <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%);
+                        min-height: 100vh;
+                    }}
+                    .container {{
+                        max-width: 600px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 16px;
+                        padding: 30px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                    }}
+                    h1 {{
+                        color: #1DA1F2;
+                        margin-top: 0;
+                        font-size: 28px;
+                    }}
+                    .icon {{
+                        font-size: 48px;
+                        margin-bottom: 20px;
+                    }}
+                    .step {{
+                        background: #f8f9fa;
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin: 15px 0;
+                        border-left: 4px solid #1DA1F2;
+                    }}
+                    .step h3 {{
+                        margin-top: 0;
+                        color: #1DA1F2;
+                        font-size: 16px;
+                    }}
+                    .example {{
+                        background: #e8f5fe;
+                        padding: 10px;
+                        border-radius: 6px;
+                        margin: 10px 0;
+                        font-style: italic;
+                    }}
+                    .btn {{
+                        display: inline-block;
+                        background: #1DA1F2;
+                        color: white;
+                        padding: 15px 30px;
+                        border-radius: 30px;
+                        text-decoration: none;
+                        font-weight: bold;
+                        margin: 20px 0;
+                        transition: background 0.3s;
+                    }}
+                    .btn:hover {{
+                        background: #0d8bd9;
+                    }}
+                    ul {{
+                        line-height: 1.8;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="icon">🐦✨</div>
+                    <h1>Twitter Voice Poster</h1>
+                    <p>Tweet with your voice using OMI!</p>
+                    
+                    <a href="{auth_url}" class="btn">🔐 Connect Twitter Account</a>
+                    
+                    <div class="step">
+                        <h3>📱 How to Use</h3>
+                        <p>After connecting your Twitter account:</p>
+                        <ol>
+                            <li>Say <strong>"Tweet Now"</strong> to your OMI device</li>
+                            <li>Speak your tweet naturally</li>
+                            <li>AI automatically detects when you're done</li>
+                            <li>Your tweet is posted instantly! 🚀</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="step">
+                        <h3>💬 Examples</h3>
+                        <div class="example">
+                            "Tweet Now, Just had an amazing conversation about AI and creativity!"
+                        </div>
+                        <div class="example">
+                            "Tweet Now, Beautiful sunset today. This is incredible. End tweet."
+                        </div>
+                        <div class="example">
+                            "Post Tweet, Excited to share my new project with the world!"
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <h3>🎯 Trigger Phrases</h3>
+                        <ul>
+                            <li>"Tweet Now"</li>
+                            <li>"Post Tweet"</li>
+                            <li>"Send Tweet"</li>
+                            <li>"Tweet This"</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="step">
+                        <h3>💡 Pro Tips</h3>
+                        <ul>
+                            <li>Speak naturally - AI cleans up filler words</li>
+                            <li>Say "End tweet" to finish explicitly</li>
+                            <li>Natural pauses are detected automatically</li>
+                            <li>Works best with 1-2 sentence tweets</li>
+                        </ul>
+                    </div>
+                    
+                    <p style="text-align: center; color: #666; margin-top: 30px;">
+                        Made with ❤️ for the OMI community
+                    </p>
+                </div>
+            </body>
+        </html>
+        """)
+    
+    # Default API info
+    return {
+        "app": "OMI Twitter Integration",
+        "version": "1.0.0",
+        "status": "active",
+        "storage": "in-memory (simple mode)",
+        "endpoints": {
+            "auth": "/auth?uid=<user_id>",
+            "webhook": "/webhook?session_id=<session>&uid=<user_id>",
+            "setup_check": "/setup-completed?uid=<user_id>"
+        }
+    }
+
+
+@app.get("/auth")
+async def auth_start(uid: str = Query(..., description="User ID from OMI")):
+    """Start OAuth flow for Twitter authentication."""
+    redirect_uri = os.getenv("OAUTH_REDIRECT_URL", "http://localhost:8000/auth/callback")
+    
+    try:
+        # Get authorization URL (Tweepy generates its own state parameter)
+        # We store the mapping between Tweepy's state and our uid internally
+        auth_url = twitter_client.get_authorization_url(redirect_uri, uid)
+        
+        # Don't modify the URL - Tweepy's state parameter is already included
+        return RedirectResponse(url=auth_url)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"OAuth initialization failed: {str(e)}")
+
+
+@app.get("/auth/callback")
+async def auth_callback(
+    request: Request,
+    state: str = Query(None),
+    code: str = Query(None)
+):
+    """Handle OAuth callback from Twitter."""
+    if not code:
+        return HTMLResponse(
+            content="""
+            <html>
+                <body style="font-family: Arial; padding: 40px; text-align: center;">
+                    <h2>❌ Authentication Failed</h2>
+                    <p>Authorization code not received. Please try again.</p>
+                </body>
+            </html>
+            """,
+            status_code=400
+        )
+    
+    # state is Tweepy's generated state parameter
+    
+    try:
+        # Exchange code for access token using stored OAuth handler
+        # This also retrieves the uid we associated with this state
+        full_url = str(request.url)
+        token_data, uid = twitter_client.get_access_token(full_url, state)
+        
+        # Save user tokens with expiration info
+        SimpleUserStorage.save_user(
+            uid=uid,
+            access_token=token_data.get('access_token'),
+            refresh_token=token_data.get('refresh_token'),
+            expires_in=token_data.get('expires_in', 7200)  # Default 2 hours
+        )
+        
+        return HTMLResponse(
+            content="""
+            <html>
+                <head>
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: 100vh;
+                            margin: 0;
+                            background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%);
+                        }
+                        .container {
+                            background: white;
+                            padding: 40px;
+                            border-radius: 16px;
+                            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                            text-align: center;
+                            max-width: 400px;
+                        }
+                        .success-icon {
+                            font-size: 64px;
+                            margin-bottom: 20px;
+                        }
+                        h2 {
+                            color: #1DA1F2;
+                            margin-bottom: 10px;
+                        }
+                        p {
+                            color: #666;
+                            line-height: 1.6;
+                        }
+                        .instruction {
+                            background: #f0f8ff;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin-top: 20px;
+                            border-left: 4px solid #1DA1F2;
+                        }
+                        .instruction strong {
+                            color: #1DA1F2;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="success-icon">✅</div>
+                        <h2>Successfully Connected!</h2>
+                        <p>Your Twitter account is now linked to OMI.</p>
+                        <div class="instruction">
+                            <strong>How to use:</strong>
+                            <p style="margin-top: 10px;">
+                                Simply say <strong>"Tweet Now"</strong> followed by your message,
+                                and it will be posted to Twitter automatically!
+                            </p>
+                            <p style="margin-top: 10px; font-size: 14px; color: #888;">
+                                Example: "Tweet Now, Just had an amazing idea about AI!"
+                            </p>
+                        </div>
+                    </div>
+                </body>
+            </html>
+            """
+        )
+    
+    except Exception as e:
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <body style="font-family: Arial; padding: 40px; text-align: center;">
+                    <h2>❌ Authentication Error</h2>
+                    <p>Failed to complete authentication: {str(e)}</p>
+                    <p><a href="/auth?uid={uid}">Try again</a></p>
+                </body>
+            </html>
+            """,
+            status_code=500
+        )
+
+
+@app.get("/setup-completed")
+async def check_setup(uid: str = Query(..., description="User ID from OMI")):
+    """Check if user has completed setup (authenticated with Twitter)."""
+    is_setup = SimpleUserStorage.is_authenticated(uid)
+    return {"is_setup_completed": is_setup}
+
+
+@app.post("/webhook")
+async def webhook(
+    request: Request,
+    uid: str = Query(..., description="User ID from OMI"),
+    session_id: str = Query(None, description="Session ID from OMI (optional)"),
+    sample_rate: int = Query(None, description="Sample rate (optional, for audio streams)")
+):
+    """
+    Real-time transcript webhook endpoint.
+    Handles requests with or without session_id parameter.
+    """
+    # Generate session_id if not provided by OMI
+    if not session_id:
+        import time
+        session_id = f"omi_{uid}_{int(time.time() * 1000)}"
+    
+    # Get user
+    user = SimpleUserStorage.get_user(uid)
+    
+    if not user or not user.get("access_token"):
+        return JSONResponse(
+            content={
+                "message": "User not authenticated. Please complete setup first.",
+                "setup_required": True
+            },
+            status_code=401
+        )
+    
+    # Check if token needs refresh
+    if SimpleUserStorage.is_token_expired(uid):
+        print(f"🔄 Token expired for user {uid[:10]}..., attempting refresh...")
+        
+        if user.get("refresh_token"):
+            try:
+                # Refresh the token
+                new_token_data = twitter_client.refresh_access_token(user["refresh_token"])
+                
+                # Save new tokens
+                SimpleUserStorage.save_user(
+                    uid=uid,
+                    access_token=new_token_data.get("access_token"),
+                    refresh_token=new_token_data.get("refresh_token", user["refresh_token"]),
+                    expires_in=new_token_data.get("expires_in", 7200)
+                )
+                
+                # Update user reference
+                user = SimpleUserStorage.get_user(uid)
+                print(f"✅ Token refreshed successfully!")
+                
+            except Exception as e:
+                print(f"❌ Token refresh failed: {e}")
+                return JSONResponse(
+                    content={
+                        "message": f"Token refresh failed. Please re-authenticate. Error: {str(e)}",
+                        "setup_required": True
+                    },
+                    status_code=401
+                )
+        else:
+            return JSONResponse(
+                content={
+                    "message": "Token expired and no refresh token available. Please re-authenticate.",
+                    "setup_required": True
+                },
+                status_code=401
+            )
+    
+    # Parse payload from OMI
+    try:
+        payload = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {str(e)}")
+    
+    # Handle both formats:
+    # 1. Direct list: [{"text": "...", ...}, ...]
+    # 2. Dict with segments: {"session_id": "...", "segments": [...]}
+    segments = []
+    if isinstance(payload, dict):
+        # Extract segments from dict
+        segments = payload.get("segments", [])
+        # Use session_id from payload if not in query params
+        if not session_id and "session_id" in payload:
+            session_id = payload["session_id"]
+    elif isinstance(payload, list):
+        # Direct list of segments
+        segments = payload
+    
+    # Log what we received for debugging
+    print(f"📥 Received {len(segments) if segments else 0} segment(s) from OMI", flush=True)
+    if segments:
+        for i, seg in enumerate(segments[:3]):  # Show first 3
+            text = seg.get('text', 'NO TEXT') if isinstance(seg, dict) else str(seg)
+            print(f"   Segment {i}: {text[:100]}", flush=True)
+    
+    if not segments or not isinstance(segments, list):
+        # Silent response for empty/invalid data
+        return {"status": "ok"}
+    
+    # Ensure we have a session_id
+    if not session_id:
+        import time
+        session_id = f"omi_{uid}_{int(time.time() * 1000)}"
+    
+    # Get or create session
+    session = SimpleSessionStorage.get_or_create_session(session_id, uid)
+    
+    # Process segments
+    response_message = await process_segments(session, segments, user)
+    
+    # Only return meaningful messages (not "Listening...")
+    if response_message and response_message != "Listening...":
+        print(f"✉️  Response: {response_message}")
+        return {
+            "message": response_message,
+            "session_id": session_id,
+            "processed_segments": len(segments)
+        }
+    
+    # Silent response for passive listening
+    return {"status": "ok"}
+
+
+async def process_segments(
+    session: dict,
+    segments: List[Dict[str, Any]],
+    user: dict
+) -> str:
+    """Process transcript segments and handle tweet commands."""
+    
+    # Extract text from segments
+    segment_texts = [seg.get("text", "") for seg in segments]
+    full_text = " ".join(segment_texts)
+    
+    session_id = session["session_id"]
+    
+    print(f"🔍 Processing text: '{full_text}'", flush=True)
+    print(f"🎯 Current mode: {session['tweet_mode']}", flush=True)
+    
+    # Check for trigger phrase (regardless of current mode)
+    if tweet_detector.detect_trigger(full_text):
+        # Extract tweet content
+        tweet_content = tweet_detector.extract_tweet_content(full_text)
+        
+        print(f"🎤 Trigger detected! Raw content: '{tweet_content}'")
+        
+        if tweet_content and len(tweet_content.strip()) > 3:
+            # Use AI to clean up and extract the actual tweet
+            print(f"🤖 Sending to OpenAI for cleanup...")
+            cleaned_content = await tweet_detector.ai_clean_tweet(full_text, tweet_content)
+            
+            print(f"✨ AI cleaned tweet: '{cleaned_content}'")
+            
+            if len(cleaned_content.strip()) > 3:
+                print(f"📤 Posting to Twitter...")
+                
+                result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
+                
+                if result and result.get("success"):
+                    SimpleSessionStorage.reset_session(session_id)
+                    print(f"✅ SUCCESS! Tweet ID: {result.get('tweet_id')}")
+                    return f"✅ Tweet posted: '{cleaned_content}'"
+                else:
+                    error = result.get("error", "Unknown error") if result else "Failed to post"
+                    SimpleSessionStorage.reset_session(session_id)
+                    print(f"❌ FAILED: {error}")
+                    return f"❌ Failed to post tweet: {error}"
+            else:
+                return "👂 Tweet content too short..."
+        else:
+            return "👂 Listening for tweet content..."
+    
+    # No trigger detected - passive listening
+    return "Listening..."
+
+
+@app.get("/test")
+async def test_interface():
+    """Web interface for testing tweet functionality."""
+    return HTMLResponse(content="""
+    <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Twitter Voice Poster - Test Interface</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: #f5f8fa;
+                }
+                .container {
+                    max-width: 800px;
+                    margin: 0 auto;
+                }
+                .header {
+                    background: linear-gradient(135deg, #1DA1F2 0%, #0d8bd9 100%);
+                    color: white;
+                    padding: 30px;
+                    border-radius: 12px;
+                    margin-bottom: 20px;
+                }
+                .card {
+                    background: white;
+                    border-radius: 12px;
+                    padding: 25px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                .input-group {
+                    margin-bottom: 15px;
+                }
+                label {
+                    display: block;
+                    margin-bottom: 8px;
+                    font-weight: 600;
+                    color: #14171a;
+                }
+                input[type="text"], textarea {
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #e1e8ed;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    box-sizing: border-box;
+                    font-family: inherit;
+                }
+                input[type="text"]:focus, textarea:focus {
+                    outline: none;
+                    border-color: #1DA1F2;
+                }
+                textarea {
+                    min-height: 100px;
+                    resize: vertical;
+                }
+                .btn {
+                    background: #1DA1F2;
+                    color: white;
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 30px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    margin-right: 10px;
+                    transition: background 0.3s;
+                }
+                .btn:hover {
+                    background: #0d8bd9;
+                }
+                .btn:disabled {
+                    background: #aab8c2;
+                    cursor: not-allowed;
+                }
+                .btn-secondary {
+                    background: #657786;
+                }
+                .btn-secondary:hover {
+                    background: #4a5a6a;
+                }
+                .status {
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 15px 0;
+                    font-weight: 500;
+                }
+                .status.idle {
+                    background: #e8f5fe;
+                    color: #1DA1F2;
+                }
+                .status.recording {
+                    background: #fff3cd;
+                    color: #856404;
+                }
+                .status.success {
+                    background: #d4edda;
+                    color: #155724;
+                }
+                .status.error {
+                    background: #f8d7da;
+                    color: #721c24;
+                }
+                .log {
+                    background: #f7f9fa;
+                    border: 1px solid #e1e8ed;
+                    border-radius: 8px;
+                    padding: 15px;
+                    max-height: 300px;
+                    overflow-y: auto;
+                    font-family: 'Monaco', 'Courier New', monospace;
+                    font-size: 13px;
+                }
+                .log-entry {
+                    padding: 5px 0;
+                    border-bottom: 1px solid #e1e8ed;
+                }
+                .log-entry:last-child {
+                    border-bottom: none;
+                }
+                .timestamp {
+                    color: #657786;
+                    margin-right: 10px;
+                }
+                .example {
+                    background: #f0f8ff;
+                    padding: 10px;
+                    border-radius: 6px;
+                    margin: 5px 0;
+                    font-size: 14px;
+                    cursor: pointer;
+                    border: 2px solid transparent;
+                }
+                .example:hover {
+                    border-color: #1DA1F2;
+                }
+                .auth-status {
+                    display: inline-block;
+                    padding: 6px 12px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+                .auth-status.connected {
+                    background: #d4edda;
+                    color: #155724;
+                }
+                .auth-status.disconnected {
+                    background: #f8d7da;
+                    color: #721c24;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🐦 Twitter Voice Poster - Test Interface</h1>
+                    <p>Test your voice commands without using OMI device</p>
+                    <div>
+                        <span class="auth-status" id="authStatus">Checking...</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Authentication</h2>
+                    <div class="input-group">
+                        <label for="uid">User ID (UID):</label>
+                        <input type="text" id="uid" placeholder="Enter your OMI user ID" value="test_user_123">
+                    </div>
+                    <button class="btn" onclick="authenticate()">🔐 Authenticate Twitter</button>
+                    <button class="btn btn-secondary" onclick="checkAuth()">🔍 Check Auth Status</button>
+                </div>
+
+                <div class="card">
+                    <h2>Test Voice Commands</h2>
+                    <div class="input-group">
+                        <label for="voiceInput">What would you say to OMI:</label>
+                        <textarea id="voiceInput" placeholder='Example: "Tweet Now, Just had an amazing idea about AI and creativity!"'></textarea>
+                    </div>
+                    <button class="btn" onclick="sendCommand()">🎤 Send Command</button>
+                    <button class="btn btn-secondary" onclick="clearLogs()">🗑️ Clear Logs</button>
+                    
+                    <div id="status" class="status idle">
+                        Status: Ready
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Quick Examples (Click to use)</h3>
+                    <div class="example" onclick="useExample(this)">
+                        Tweet Now, Just launched my new AI project and it's incredible!
+                    </div>
+                    <div class="example" onclick="useExample(this)">
+                        Tweet Now, Beautiful sunset today. Nature never stops amazing me. End tweet.
+                    </div>
+                    <div class="example" onclick="useExample(this)">
+                        Post Tweet, Excited to share my thoughts on the future of voice interfaces!
+                    </div>
+                    <div class="example" onclick="useExample(this)">
+                        Tweet Now, Sometimes the best ideas come when you least expect them.
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Activity Log</h2>
+                    <div id="log" class="log">
+                        <div class="log-entry">
+                            <span class="timestamp">Ready</span>
+                            <span>Waiting for commands...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                const sessionId = 'test_session_' + Date.now();
+                
+                function addLog(message, type = 'info') {
+                    const log = document.getElementById('log');
+                    const entry = document.createElement('div');
+                    entry.className = 'log-entry';
+                    const time = new Date().toLocaleTimeString();
+                    entry.innerHTML = `<span class="timestamp">[${time}]</span><span>${message}</span>`;
+                    log.insertBefore(entry, log.firstChild);
+                }
+                
+                function setStatus(message, type = 'idle') {
+                    const status = document.getElementById('status');
+                    status.textContent = message;
+                    status.className = 'status ' + type;
+                }
+                
+                async function checkAuth() {
+                    const uid = document.getElementById('uid').value;
+                    if (!uid) {
+                        alert('Please enter a User ID');
+                        return;
+                    }
+                    
+                    try {
+                        addLog('Checking authentication status...');
+                        const response = await fetch(`/setup-completed?uid=${uid}`);
+                        const data = await response.json();
+                        
+                        const authStatus = document.getElementById('authStatus');
+                        if (data.is_setup_completed) {
+                            authStatus.textContent = '✅ Connected';
+                            authStatus.className = 'auth-status connected';
+                            addLog('✅ Twitter account is connected!', 'success');
+                        } else {
+                            authStatus.textContent = '❌ Not Connected';
+                            authStatus.className = 'auth-status disconnected';
+                            addLog('❌ Twitter account not connected. Please authenticate.', 'error');
+                        }
+                    } catch (error) {
+                        addLog('❌ Error checking auth: ' + error.message, 'error');
+                    }
+                }
+                
+                function authenticate() {
+                    const uid = document.getElementById('uid').value;
+                    if (!uid) {
+                        alert('Please enter a User ID');
+                        return;
+                    }
+                    
+                    addLog('Opening Twitter authentication...');
+                    window.open(`/auth?uid=${uid}`, '_blank');
+                    
+                    setTimeout(() => {
+                        addLog('After authenticating, click "Check Auth Status" to verify.');
+                    }, 1000);
+                }
+                
+                async function sendCommand() {
+                    const uid = document.getElementById('uid').value;
+                    const voiceInput = document.getElementById('voiceInput').value;
+                    
+                    if (!uid || !voiceInput) {
+                        alert('Please enter both User ID and voice command');
+                        return;
+                    }
+                    
+                    setStatus('🎤 Processing command...', 'recording');
+                    addLog('📤 Sending: "' + voiceInput + '"');
+                    
+                    try {
+                        // Simulate transcript segments
+                        const segments = [{
+                            text: voiceInput,
+                            speaker: "SPEAKER_00",
+                            speakerId: 0,
+                            is_user: true,
+                            start: 0.0,
+                            end: 5.0
+                        }];
+                        
+                        const response = await fetch(`/webhook?session_id=${sessionId}&uid=${uid}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(segments)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            if (data.message.includes('✅')) {
+                                setStatus(data.message, 'success');
+                                addLog('✅ ' + data.message, 'success');
+                            } else if (data.message.includes('❌')) {
+                                setStatus(data.message, 'error');
+                                addLog('❌ ' + data.message, 'error');
+                            } else {
+                                setStatus(data.message, 'recording');
+                                addLog('📝 ' + data.message);
+                            }
+                        } else {
+                            setStatus('❌ Error: ' + data.message, 'error');
+                            addLog('❌ Error: ' + data.message, 'error');
+                        }
+                    } catch (error) {
+                        setStatus('❌ Error sending command', 'error');
+                        addLog('❌ Network error: ' + error.message, 'error');
+                    }
+                }
+                
+                function useExample(element) {
+                    document.getElementById('voiceInput').value = element.textContent.trim();
+                    addLog('📝 Example loaded: "' + element.textContent.trim() + '"');
+                }
+                
+                function clearLogs() {
+                    document.getElementById('log').innerHTML = '<div class="log-entry"><span class="timestamp">Cleared</span><span>Logs cleared</span></div>';
+                    setStatus('Status: Ready', 'idle');
+                }
+                
+                // Check auth on load
+                window.onload = function() {
+                    checkAuth();
+                };
+            </script>
+        </body>
+    </html>
+    """)
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "service": "omi-twitter-integration"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("APP_PORT", 8000))
+    host = os.getenv("APP_HOST", "0.0.0.0")
+    
+    print("🐦 OMI Twitter Integration - Simple Mode")
+    print("=" * 50)
+    print("✅ Using in-memory storage (no database)")
+    print(f"🚀 Starting on {host}:{port}")
+    print("⚠️  Note: Data resets when server restarts")
+    print("=" * 50)
+    
+    uvicorn.run(
+        "main_simple:app",
+        host=host,
+        port=port,
+        reload=True
+    )
+
