@@ -88,8 +88,9 @@ class TweetDetector:
         if cls.detect_end(accumulated_text):
             return 1.0
         
-        # Very short tweets are likely incomplete
-        if len(accumulated_text.strip()) < 5:
+        # Very short tweets might still be complete
+        cleaned = accumulated_text.strip().lstrip('.,!?;: ')
+        if len(cleaned) < 3:
             return 0.0
         
         try:
@@ -98,34 +99,38 @@ class TweetDetector:
                 messages=[
                     {
                         "role": "system",
-                        "content": """You analyze speech to determine if a tweet is complete.
+                        "content": """You check if a tweet/statement is complete or needs more content.
 
-A tweet is COMPLETE (1.0) if:
-- It expresses a full thought
-- Has proper ending (not mid-sentence)
-- Makes sense on its own
-- Doesn't sound cut off
+COMPLETE (score 0.8-1.0):
+✓ Expresses a complete thought or feeling
+✓ Can stand alone as a valid tweet
+✓ Examples:
+  - "that this is amazing" → 0.9
+  - "This is incredible" → 1.0
+  - "Just had the best day" → 0.95
+  - "Love this" → 0.9
 
-A tweet is INCOMPLETE (0.0) if:
-- Ends mid-sentence or mid-word
-- Trailing words suggest more coming ("and...", "but...", "also...")
-- Sounds like speaker was interrupted
-- Missing obvious conclusion
+INCOMPLETE (score 0.0-0.4):
+✗ Ends mid-sentence/mid-thought
+✗ Obviously needs more words
+✗ Examples:
+  - "I think that" → 0.2
+  - "This is" → 0.1
+  - "Just had a great idea and" → 0.15
+  - "Going to" → 0.1
 
-Return ONLY a single number: 0.0 (incomplete) to 1.0 (complete)
-Examples:
-- "This is amazing" → 1.0 (complete)
-- "This is" → 0.0 (incomplete)
-- "I think that" → 0.2 (likely incomplete)
-- "Just had a great idea and" → 0.1 (clearly incomplete)"""
+Be GENEROUS with completeness scores. Short tweets are often intentionally brief.
+If it could be a tweet, score it 0.7+
+
+Respond with ONLY a number 0.0-1.0"""
                     },
                     {
                         "role": "user",
-                        "content": f"Tweet content: {accumulated_text}\n\nCompleteness score (0.0-1.0):"
+                        "content": f"Text: \"{cleaned}\"\n\nCompleteness (0.0-1.0):"
                     }
                 ],
-                temperature=0.1,
-                max_tokens=10
+                temperature=0.2,
+                max_tokens=5
             )
             
             result = response.choices[0].message.content.strip()
@@ -134,16 +139,17 @@ Examples:
             try:
                 score = float(result)
                 score = max(0.0, min(1.0, score))  # Clamp between 0 and 1
-                print(f"🤖 AI completeness score: {score:.2f}", flush=True)
+                print(f"🤖 Completeness: {score:.2f} for '{cleaned[:50]}...'", flush=True)
                 return score
             except:
-                # If can't parse, assume moderately complete
-                return 0.6
+                # If can't parse, be generous
+                print(f"⚠️  Couldn't parse AI score, defaulting to 0.8", flush=True)
+                return 0.8
                 
         except Exception as e:
-            print(f"⚠️  AI check failed: {e}, assuming complete", flush=True)
+            print(f"⚠️  AI check failed: {e}, defaulting to complete", flush=True)
             # On error, assume complete if reasonable length
-            return 1.0 if len(accumulated_text.strip()) > 10 else 0.3
+            return 0.9 if len(cleaned) > 8 else 0.5
     
     @classmethod
     async def ai_clean_tweet(cls, full_text: str, extracted_content: str) -> str:
