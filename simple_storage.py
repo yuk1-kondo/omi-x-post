@@ -109,7 +109,10 @@ class SimpleSessionStorage:
                 "transcript": "",
                 "tweet_mode": "idle",  # idle, recording, posted
                 "tweet_content": "",
-                "created_at": datetime.utcnow()
+                "segments_count": 0,
+                "last_segment_time": None,
+                "accumulated_text": "",
+                "created_at": datetime.utcnow().isoformat()
             }
         return sessions[session_id]
     
@@ -126,7 +129,10 @@ class SimpleSessionStorage:
             sessions[session_id].update({
                 "transcript": "",
                 "tweet_mode": "idle",
-                "tweet_content": ""
+                "tweet_content": "",
+                "segments_count": 0,
+                "last_segment_time": None,
+                "accumulated_text": ""
             })
 
 
