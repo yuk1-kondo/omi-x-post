@@ -442,7 +442,7 @@ async def process_segments(
     segments: List[Dict[str, Any]],
     user: dict
 ) -> str:
-    """Process transcript segments with smart accumulation (up to 3 segments or 5 sec gap)."""
+    """Process segments with AI-based completeness detection."""
     from datetime import datetime
     
     # Extract text from segments
@@ -452,94 +452,93 @@ async def process_segments(
     session_id = session["session_id"]
     current_time = datetime.utcnow()
     
-    print(f"🔍 Processing text: '{full_text}'", flush=True)
-    print(f"🎯 Mode: {session['tweet_mode']}, Segments: {session.get('segments_count', 0)}/3", flush=True)
+    print(f"🔍 Text: '{full_text}'", flush=True)
+    print(f"🎯 Mode: {session['tweet_mode']}, Segments: {session.get('segments_count', 0)}", flush=True)
     
     # Check for trigger phrase
     if tweet_detector.detect_trigger(full_text):
         tweet_content = tweet_detector.extract_tweet_content(full_text)
         
-        print(f"🎤 Trigger detected! Starting accumulation...", flush=True)
+        print(f"🎤 Trigger! Content: '{tweet_content}'", flush=True)
         
-        # Start accumulation mode
-        SimpleSessionStorage.update_session(
-            session_id,
-            tweet_mode="recording",
-            accumulated_text=tweet_content,
-            segments_count=1,
-            last_segment_time=current_time.isoformat()
-        )
+        # Check if this first segment is already complete
+        completeness = await tweet_detector.ai_check_completeness(tweet_content)
         
-        return f"📝 Recording (1/3): waiting for more..."
-    
-    # If in recording mode, accumulate more segments
-    elif session["tweet_mode"] == "recording":
-        segments_count = session.get("segments_count", 0)
-        accumulated = session.get("accumulated_text", "")
-        last_time_str = session.get("last_segment_time")
-        
-        # Calculate time gap since last segment
-        time_gap = 999
-        if last_time_str:
-            try:
-                last_time = datetime.fromisoformat(last_time_str)
-                time_gap = (current_time - last_time).total_seconds()
-                print(f"⏱️  Gap: {time_gap:.1f}s", flush=True)
-            except:
-                pass
-        
-        # Accumulate new text
-        accumulated += " " + full_text
-        segments_count += 1
-        
-        print(f"📝 Accumulated ({segments_count}/3): '{accumulated[:80]}...'", flush=True)
-        
-        # Decide whether to post
-        should_post = False
-        reason = ""
-        
-        if time_gap > 5:
-            should_post = True
-            reason = "5s pause"
-        elif segments_count >= 3:
-            should_post = True
-            reason = "3 segments"
-        
-        if should_post:
-            print(f"🚦 Posting ({reason})", flush=True)
-            print(f"🤖 AI cleanup...", flush=True)
-            
-            # AI extracts and cleans the tweet
-            cleaned_content = await tweet_detector.ai_clean_tweet(accumulated, accumulated)
+        if completeness >= 0.7:
+            # Tweet sounds complete, post immediately
+            print(f"✅ Complete ({completeness:.2f})! Posting now...", flush=True)
+            cleaned_content = await tweet_detector.ai_clean_tweet(full_text, tweet_content)
             
             print(f"✨ Cleaned: '{cleaned_content}'", flush=True)
             
+            result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
+            
+            if result and result.get("success"):
+                SimpleSessionStorage.reset_session(session_id)
+                print(f"🎉 Posted! ID: {result.get('tweet_id')}", flush=True)
+                return f"✅ Tweet posted: '{cleaned_content}'"
+            else:
+                error = result.get("error", "Unknown") if result else "Failed"
+                SimpleSessionStorage.reset_session(session_id)
+                return f"❌ Failed: {error}"
+        else:
+            # Incomplete, start accumulating
+            print(f"⏳ Incomplete ({completeness:.2f}), waiting for more...", flush=True)
+            SimpleSessionStorage.update_session(
+                session_id,
+                tweet_mode="recording",
+                accumulated_text=tweet_content,
+                segments_count=1,
+                last_segment_time=current_time.isoformat()
+            )
+            return f"📝 Recording... (waiting for more)"
+    
+    # If in recording mode, accumulate and re-check
+    elif session["tweet_mode"] == "recording":
+        accumulated = session.get("accumulated_text", "")
+        segments_count = session.get("segments_count", 0)
+        
+        # Add new text
+        accumulated += " " + full_text
+        segments_count += 1
+        
+        print(f"📝 Accumulated: '{accumulated[:100]}...'", flush=True)
+        
+        # Ask AI if it's complete now
+        completeness = await tweet_detector.ai_check_completeness(accumulated)
+        
+        # Safety limit: max 5 segments
+        if completeness >= 0.6 or segments_count >= 5:
+            reason = f"AI:{completeness:.2f}" if completeness >= 0.6 else "max segments"
+            print(f"🚦 Posting ({reason})", flush=True)
+            
+            cleaned_content = await tweet_detector.ai_clean_tweet(accumulated, accumulated)
+            print(f"✨ Cleaned: '{cleaned_content}'", flush=True)
+            
             if len(cleaned_content.strip()) > 3:
-                print(f"📤 Posting...", flush=True)
-                
                 result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
                 
                 if result and result.get("success"):
                     SimpleSessionStorage.reset_session(session_id)
-                    print(f"✅ SUCCESS! ID: {result.get('tweet_id')}", flush=True)
-                    return f"✅ Posted: '{cleaned_content}'"
+                    print(f"🎉 Posted! ID: {result.get('tweet_id')}", flush=True)
+                    return f"✅ Tweet posted: '{cleaned_content}'"
                 else:
                     error = result.get("error", "Unknown") if result else "Failed"
                     SimpleSessionStorage.reset_session(session_id)
-                    print(f"❌ FAILED: {error}", flush=True)
                     return f"❌ Failed: {error}"
             else:
                 SimpleSessionStorage.reset_session(session_id)
-                return "❌ Too short after cleanup"
+                return "❌ Too short"
         else:
-            # Keep accumulating
+            # Still incomplete, keep waiting
+            print(f"⏳ Still incomplete ({completeness:.2f}), waiting...", flush=True)
             SimpleSessionStorage.update_session(
                 session_id,
                 accumulated_text=accumulated,
                 segments_count=segments_count,
                 last_segment_time=current_time.isoformat()
             )
-            return f"📝 Recording ({segments_count}/3)..."
+            return f"📝 Recording... ({completeness:.0%} complete)"
     
     # Passive listening
     return "Listening..."
