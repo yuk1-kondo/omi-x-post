@@ -152,6 +152,76 @@ Respond with ONLY a number 0.0-1.0"""
             return 0.9 if len(cleaned) > 8 else 0.5
     
     @classmethod
+    async def ai_extract_tweet_from_segments(cls, all_segments_text: str) -> str:
+        """
+        Extract the actual tweet from 3 segments of speech.
+        AI intelligently determines what's the tweet vs what's not.
+        """
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You extract tweets from voice transcripts.
+
+The user said "Tweet Now" and then spoke for a bit. Extract ONLY the tweet content.
+
+Rules:
+1. The tweet starts after "Tweet Now" trigger phrase
+2. Some speech may NOT be part of the tweet (side comments, corrections, etc.)
+3. Extract only what should be tweeted
+4. Clean up filler words (um, uh, like, you know)
+5. Fix grammar and capitalization
+6. Make it sound natural and well-written
+7. Keep under 280 characters
+
+Examples:
+
+Input: "that this is amazing and oh wait I also need to buy milk later"
+Output: "That this is amazing"
+
+Input: "I just had an incredible idea about AI and creativity this is so cool"
+Output: "I just had an incredible idea about AI and creativity. This is so cool!"
+
+Input: "the best day ever no wait scratch that it was pretty good"
+Output: "The best day ever"
+
+Respond with ONLY the cleaned tweet text. No quotes, no explanations."""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Voice transcript after 'Tweet Now': {all_segments_text}\n\nExtract the tweet:"
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=150
+            )
+            
+            cleaned = response.choices[0].message.content.strip()
+            
+            # Remove quotes if AI added them
+            if cleaned.startswith('"') and cleaned.endswith('"'):
+                cleaned = cleaned[1:-1]
+            if cleaned.startswith("'") and cleaned.endswith("'"):
+                cleaned = cleaned[1:-1]
+            
+            # Ensure proper capitalization
+            if cleaned and cleaned[0].islower():
+                cleaned = cleaned[0].upper() + cleaned[1:]
+            
+            # Truncate if too long
+            if len(cleaned) > 280:
+                cleaned = cleaned[:277] + "..."
+            
+            return cleaned
+            
+        except Exception as e:
+            print(f"⚠️  AI extraction failed: {e}, using basic cleanup", flush=True)
+            # Fallback
+            return cls.clean_tweet_content(all_segments_text)
+    
+    @classmethod
     async def ai_clean_tweet(cls, full_text: str, extracted_content: str) -> str:
         """
         Use OpenAI to intelligently clean and extract the tweet.

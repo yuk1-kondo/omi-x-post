@@ -413,13 +413,16 @@ async def webhook(
         # Silent response for empty/invalid data
         return {"status": "ok"}
     
-    # Ensure we have a session_id
+    # Ensure we have a consistent session_id per user
+    # Use uid as session_id so it persists across calls
     if not session_id:
-        import time
-        session_id = f"omi_{uid}_{int(time.time() * 1000)}"
+        session_id = f"omi_session_{uid}"
     
     # Get or create session
     session = SimpleSessionStorage.get_or_create_session(session_id, uid)
+    
+    # Debug: show current session state
+    print(f"📊 Session state: mode={session.get('tweet_mode')}, count={session.get('segments_count', 0)}", flush=True)
     
     # Process segments
     response_message = await process_segments(session, segments, user)
@@ -443,115 +446,85 @@ async def process_segments(
     user: dict
 ) -> str:
     """
-    Process segments with smart accumulation:
-    - Always wait for 3 segments minimum
-    - Max 10 second timeout between segments
-    - After 3rd segment OR timeout, send to AI for cleanup and post
+    ALWAYS collect exactly 3 segments after 'Tweet Now', then AI extracts the tweet.
+    - Segment 1: Contains "Tweet Now" + start of tweet
+    - Segment 2: Middle part (auto-collected)
+    - Segment 3: End part (auto-collected)
+    - AI decides what's actually the tweet and cleans it
     """
-    from datetime import datetime
     
     # Extract text from segments
     segment_texts = [seg.get("text", "") for seg in segments]
     full_text = " ".join(segment_texts)
     
     session_id = session["session_id"]
-    current_time = datetime.utcnow()
     
-    print(f"🔍 Text: '{full_text}'", flush=True)
-    print(f"🎯 Mode: {session['tweet_mode']}, Segments: {session.get('segments_count', 0)}/3", flush=True)
+    print(f"🔍 Received: '{full_text}'", flush=True)
+    print(f"📊 Session mode: {session['tweet_mode']}, Count: {session.get('segments_count', 0)}/3", flush=True)
     
     # Check for trigger phrase
     if tweet_detector.detect_trigger(full_text):
         tweet_content = tweet_detector.extract_tweet_content(full_text)
         
-        print(f"🎤 Trigger detected! Starting 3-segment collection...", flush=True)
+        print(f"🎤 TRIGGER! Starting 3-segment collection...", flush=True)
+        print(f"   Segment 1 content: '{tweet_content}'", flush=True)
         
-        # Start accumulation - always wait for at least 3 segments
+        # Start collecting - ALWAYS wait for 2 more segments
         SimpleSessionStorage.update_session(
             session_id,
             tweet_mode="recording",
             accumulated_text=tweet_content,
-            segments_count=1,
-            last_segment_time=current_time.isoformat()
+            segments_count=1
         )
         
-        return f"📝 Segment 1/3: '{tweet_content[:50]}...'"
+        return f"📝 Collecting segment 1/3..."
     
-    # If in recording mode, accumulate more
+    # If in recording mode, collect more segments
     elif session["tweet_mode"] == "recording":
         accumulated = session.get("accumulated_text", "")
         segments_count = session.get("segments_count", 0)
-        last_time_str = session.get("last_segment_time")
         
-        # Calculate time since last segment
-        time_gap = 0
-        if last_time_str:
-            try:
-                last_time = datetime.fromisoformat(last_time_str)
-                time_gap = (current_time - last_time).total_seconds()
-                print(f"⏱️  Time since last: {time_gap:.1f}s", flush=True)
-            except:
-                pass
-        
-        # Check for timeout (10 seconds)
-        if time_gap > 10 and segments_count >= 1:
-            print(f"⏰ 10s timeout! Posting with {segments_count} segment(s)...", flush=True)
-            
-            # Post what we have
-            cleaned_content = await tweet_detector.ai_clean_tweet(accumulated, accumulated)
-            print(f"✨ Cleaned: '{cleaned_content}'", flush=True)
-            
-            if len(cleaned_content.strip()) > 3:
-                result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
-                
-                if result and result.get("success"):
-                    SimpleSessionStorage.reset_session(session_id)
-                    print(f"🎉 Posted! ID: {result.get('tweet_id')}", flush=True)
-                    return f"✅ Tweet posted: '{cleaned_content}'"
-                else:
-                    error = result.get("error", "Unknown") if result else "Failed"
-                    SimpleSessionStorage.reset_session(session_id)
-                    return f"❌ Failed: {error}"
-            else:
-                SimpleSessionStorage.reset_session(session_id)
-                return "❌ Too short"
-        
-        # Accumulate this segment
+        # Add this segment
         accumulated += " " + full_text
         segments_count += 1
         
-        print(f"📝 Accumulated ({segments_count}/3): '{accumulated[:100]}...'", flush=True)
+        print(f"📝 Segment {segments_count}/3: '{full_text}'", flush=True)
+        print(f"📚 Full accumulated: '{accumulated[:150]}...'", flush=True)
         
-        # Post after 3rd segment
+        # Always collect 3 segments
         if segments_count >= 3:
-            print(f"✅ Got 3 segments! Posting...", flush=True)
+            print(f"✅ Got all 3 segments! Sending to AI...", flush=True)
             
-            cleaned_content = await tweet_detector.ai_clean_tweet(accumulated, accumulated)
-            print(f"✨ Cleaned: '{cleaned_content}'", flush=True)
+            # AI extracts the actual tweet from all 3 segments
+            cleaned_content = await tweet_detector.ai_extract_tweet_from_segments(accumulated)
+            
+            print(f"✨ AI extracted tweet: '{cleaned_content}'", flush=True)
             
             if len(cleaned_content.strip()) > 3:
+                print(f"📤 Posting to Twitter...", flush=True)
                 result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
                 
                 if result and result.get("success"):
                     SimpleSessionStorage.reset_session(session_id)
-                    print(f"🎉 Posted! ID: {result.get('tweet_id')}", flush=True)
+                    print(f"🎉 SUCCESS! Tweet ID: {result.get('tweet_id')}", flush=True)
                     return f"✅ Tweet posted: '{cleaned_content}'"
                 else:
                     error = result.get("error", "Unknown") if result else "Failed"
                     SimpleSessionStorage.reset_session(session_id)
+                    print(f"❌ FAILED: {error}", flush=True)
                     return f"❌ Failed: {error}"
             else:
                 SimpleSessionStorage.reset_session(session_id)
-                return "❌ Too short"
+                print(f"⚠️  AI returned empty tweet", flush=True)
+                return "❌ No valid tweet content"
         else:
-            # Keep accumulating (1 or 2 segments so far)
+            # Still collecting (need segment 2 or 3)
             SimpleSessionStorage.update_session(
                 session_id,
                 accumulated_text=accumulated,
-                segments_count=segments_count,
-                last_segment_time=current_time.isoformat()
+                segments_count=segments_count
             )
-            return f"📝 Segment {segments_count}/3: waiting..."
+            return f"📝 Collecting segment {segments_count}/3..."
     
     # Passive listening
     return "Listening..."
