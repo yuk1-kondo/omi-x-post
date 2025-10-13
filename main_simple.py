@@ -573,38 +573,46 @@ async def webhook(
     
     # Check if token needs refresh
     if SimpleUserStorage.is_token_expired(uid):
-        print(f"🔄 Token expired for user {uid[:10]}..., attempting refresh...")
+        print(f"🔄 Token expired for user {uid[:10]}...", flush=True)
         
-        if user.get("refresh_token"):
-            try:
-                # Refresh the token
-                new_token_data = twitter_client.refresh_access_token(user["refresh_token"])
-                
-                # Save new tokens
-                SimpleUserStorage.save_user(
-                    uid=uid,
-                    access_token=new_token_data.get("access_token"),
-                    refresh_token=new_token_data.get("refresh_token", user["refresh_token"]),
-                    expires_in=new_token_data.get("expires_in", 7200)
-                )
-                
-                # Update user reference
-                user = SimpleUserStorage.get_user(uid)
-                print(f"✅ Token refreshed successfully!")
-                
-            except Exception as e:
-                print(f"❌ Token refresh failed: {e}")
-                return JSONResponse(
-                    content={
-                        "message": f"Token refresh failed. Please re-authenticate. Error: {str(e)}",
-                        "setup_required": True
-                    },
-                    status_code=401
-                )
-        else:
+        # Check if we have a valid refresh token
+        refresh_token = user.get("refresh_token")
+        
+        if not refresh_token or refresh_token == "null":
+            print(f"⚠️  No refresh token! User must re-authenticate with offline.access scope.", flush=True)
             return JSONResponse(
                 content={
-                    "message": "Token expired and no refresh token available. Please re-authenticate.",
+                    "message": "🔄 Your session expired. Please re-authenticate in the OMI app to continue tweeting.",
+                    "setup_required": True
+                },
+                status_code=401
+            )
+        
+        # Try to refresh
+        try:
+            print(f"🔄 Refreshing token...", flush=True)
+            new_token_data = twitter_client.refresh_access_token(refresh_token)
+            
+            # Save new tokens
+            SimpleUserStorage.save_user(
+                uid=uid,
+                access_token=new_token_data.get("access_token"),
+                refresh_token=new_token_data.get("refresh_token", refresh_token),
+                expires_in=new_token_data.get("expires_in", 7200)
+            )
+            
+            # Update user reference
+            user = SimpleUserStorage.get_user(uid)
+            print(f"✅ Token refreshed!", flush=True)
+            
+        except Exception as e:
+            print(f"❌ Refresh error: {e}", flush=True)
+            # Delete old invalid token
+            del users[uid]
+            save_users()
+            return JSONResponse(
+                content={
+                    "message": "🔄 Session expired. Please re-authenticate in the OMI app.",
                     "setup_required": True
                 },
                 status_code=401
