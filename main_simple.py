@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 # Fix for Railway/production: Allow OAuth over HTTP (Railway handles HTTPS at proxy)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-from simple_storage import SimpleUserStorage, SimpleSessionStorage, OAuthStateStorage
+from simple_storage import SimpleUserStorage, SimpleSessionStorage, OAuthStateStorage, users, save_users
 from twitter_client import TwitterClient
 from tweet_detector import TweetDetector
 
