@@ -8,6 +8,9 @@
 users_data.json
 sessions_data.json
 
+# Logs
+server.log
+
 # Python
 __pycache__/
 *.py[cod]

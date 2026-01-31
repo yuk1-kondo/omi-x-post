@@ -12,10 +12,10 @@ STORAGE_DIR = os.getenv("STORAGE_DIR", os.path.dirname(os.path.abspath(__file__)
 # Check if we're on Railway (has /app/data volume)
 if os.path.exists("/app/data"):
     STORAGE_DIR = "/app/data"
-    print(f"📁 Using persistent storage at: /app/data", flush=True)
+    print("INFO Using persistent storage at: /app/data", flush=True)
 else:
     STORAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-    print(f"📁 Using local storage at: {STORAGE_DIR}", flush=True)
+    print(f"INFO Using local storage at: {STORAGE_DIR}", flush=True)
 
 USERS_FILE = os.path.join(STORAGE_DIR, "users_data.json")
 SESSIONS_FILE = os.path.join(STORAGE_DIR, "sessions_data.json")
@@ -32,31 +32,31 @@ def load_storage():
         if os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'r') as f:
                 users = json.load(f)
-                print(f"✅ Loaded {len(users)} users from storage")
+                print(f"INFO Loaded {len(users)} users from storage")
     except Exception as e:
-        print(f"⚠️  Could not load users: {e}")
+            print(f"WARN Could not load users: {e}")
     
     try:
         if os.path.exists(SESSIONS_FILE):
             with open(SESSIONS_FILE, 'r') as f:
                 sessions = json.load(f)
-                print(f"✅ Loaded {len(sessions)} sessions from storage")
+                print(f"INFO Loaded {len(sessions)} sessions from storage")
     except Exception as e:
-        print(f"⚠️  Could not load sessions: {e}")
+            print(f"WARN Could not load sessions: {e}")
 
 def save_users():
     try:
         with open(USERS_FILE, 'w') as f:
             json.dump(users, f, default=str)
     except Exception as e:
-        print(f"⚠️  Could not save users: {e}")
+        print(f"WARN Could not save users: {e}")
 
 def save_sessions():
     try:
         with open(SESSIONS_FILE, 'w') as f:
             json.dump(sessions, f, default=str)
     except Exception as e:
-        print(f"⚠️  Could not save sessions: {e}")
+        print(f"WARN Could not save sessions: {e}")
 
 # Load on module import
 load_storage()
@@ -76,7 +76,7 @@ class SimpleUserStorage:
             "created_at": datetime.utcnow().isoformat()
         }
         save_users()  # Persist to file
-        print(f"💾 Saved tokens for user {uid[:10]}... (expires in {expires_in/3600:.1f} hours)")
+        print(f"INFO Saved tokens for user {uid[:10]}... (expires in {expires_in/3600:.1f} hours)")
     
     @staticmethod
     def get_user(uid: str) -> Optional[dict]:
@@ -122,7 +122,8 @@ class SimpleSessionStorage:
                 "accumulated_text": "",
                 "created_at": datetime.utcnow().isoformat()
             }
-            print(f"🆕 Created new session: {session_id}", flush=True)
+            print(f"INFO Created new session: {session_id}", flush=True)
+            save_sessions()  # Persist to file
         return sessions[session_id]
     
     @staticmethod
@@ -130,9 +131,10 @@ class SimpleSessionStorage:
         """Update session fields"""
         if session_id in sessions:
             sessions[session_id].update(kwargs)
-            print(f"💾 Updated session {session_id}: {kwargs}", flush=True)
+            save_sessions()  # Persist to file
+            print(f"INFO Updated session {session_id}: {kwargs}", flush=True)
         else:
-            print(f"⚠️  Session {session_id} not found for update!", flush=True)
+            print(f"WARN Session {session_id} not found for update!", flush=True)
     
     @staticmethod
     def reset_session(session_id: str):
@@ -146,6 +148,7 @@ class SimpleSessionStorage:
                 "last_segment_time": None,
                 "accumulated_text": ""
             })
+            save_sessions()  # Persist to file
 
 
 class OAuthStateStorage:

@@ -3,7 +3,7 @@ from typing import Optional
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # Load .env file
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))  # Load .env file
 
 
 class TwitterClient:
@@ -107,7 +107,7 @@ class TwitterClient:
         token_dict = oauth2_user_handler.fetch_token(authorization_response)
         
         # Debug: Log what we got
-        print(f"📦 Token exchange result:", flush=True)
+        print("Token exchange result:", flush=True)
         print(f"   Keys in token_dict: {list(token_dict.keys())}", flush=True)
         print(f"   Has refresh_token: {'refresh_token' in token_dict}", flush=True)
         
@@ -126,6 +126,9 @@ class TwitterClient:
         """
         try:
             import requests
+
+            if not self.client_id or not self.client_secret:
+                raise Exception("Client ID/Secret not configured")
             
             # Make direct API call to refresh token
             # Tweepy's refresh_token method can be unreliable
@@ -142,15 +145,15 @@ class TwitterClient:
             
             if response.status_code == 200:
                 token_data = response.json()
-                print(f"✅ Token refresh successful")
+                print("Token refresh successful")
                 return token_data
             else:
                 error_msg = response.text
-                print(f"❌ Token refresh failed: {response.status_code} - {error_msg}")
+                print(f"Token refresh failed: {response.status_code} - {error_msg}")
                 raise Exception(f"Token refresh failed: {error_msg}")
                 
         except Exception as e:
-            print(f"❌ Token refresh error: {e}", flush=True)
+            print(f"Token refresh error: {e}", flush=True)
             import traceback
             traceback.print_exc()
             raise Exception(f"Failed to refresh token: {e}")

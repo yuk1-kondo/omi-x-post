@@ -1,27 +1,59 @@
+import asyncio
 import re
-from typing import Optional, Tuple
-from openai import AsyncOpenAI
+from typing import Optional
 import os
 from dotenv import load_dotenv
+import google.generativeai as genai
 
-load_dotenv()  # Load .env file
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))  # Load .env file
+
+
+class GeminiClient:
+    """Gemini API client wrapper."""
+
+    def __init__(self) -> None:
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        if self.api_key:
+            genai.configure(api_key=self.api_key)
+        self.model = genai.GenerativeModel(self.model_name)
+
+    def generate_text(self, prompt: str) -> str:
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+        response = self.model.generate_content(prompt)
+        return (response.text or "").strip()
+
+
+gemini_client = GeminiClient()
 
 
 class TweetDetector:
-    """Detects 'Tweet Now' commands and extracts tweet content intelligently."""
+    """Detects tweet trigger phrases and extracts tweet content."""
     
     TRIGGER_PHRASES = [
+        "x now",
+        "x\u30ca\u30a6",
+        "x\u306a\u3046",
+        "\u30a8\u30c3\u30af\u30b9\u30ca\u30a6",
+        "\u30a8\u30c3\u30af\u30b9\u306a\u3046",
+        "\u30a8\u30b9\u30ca",
+        "\u3048\u3059\u306a",
+        "\u30a8\u30b9\u30ca\u30a6",
+        "\u3048\u3059\u306a\u3046",
+        "\u30a8\u30af\u30b9\u30ca\u30a6",
+        "\u30a8\u30af\u30b9\u306a\u3046",
+        "\u3048\u304f\u3059\u306a\u3046",
         "tweet now",
         "post tweet",
         "send tweet",
         "tweet this",
-        "post this tweet"
+        "post this tweet",
+        "post to x"
     ]
     
     END_PHRASES = [
         "end tweet",
-        "stop tweet",
         "that's it",
         "that's the tweet",
         "done tweeting",
@@ -60,7 +92,7 @@ class TweetDetector:
                 matched_trigger = trigger
                 break
         
-        if trigger_index == -1:
+        if trigger_index == -1 or matched_trigger is None:
             return None
         
         # Extract content after trigger
@@ -93,62 +125,38 @@ class TweetDetector:
         if len(cleaned) < 3:
             return 0.0
         
+        prompt = f"""You judge whether a short text sounds like a complete post.
+
+    Complete (0.8-1.0):
+    - A single thought/emotion feels finished
+    - Can be posted as-is
+    Examples:
+    - "This is great" -> 0.9
+    - "Best day ever" -> 0.95
+    - "Love this" -> 0.9
+
+    Incomplete (0.0-0.4):
+    - The sentence is cut off
+    - It clearly needs continuation
+    Examples:
+    - "I was thinking that" -> 0.2
+    - "This is" -> 0.1
+    - "Today was the best" -> 0.15
+
+    If it sounds postable even if short, score 0.7 or higher.
+    Output ONLY a number between 0.0 and 1.0.
+
+    Text: "{cleaned}"
+    Score:"""
+
         try:
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You check if a tweet/statement is complete or needs more content.
-
-COMPLETE (score 0.8-1.0):
-✓ Expresses a complete thought or feeling
-✓ Can stand alone as a valid tweet
-✓ Examples:
-  - "that this is amazing" → 0.9
-  - "This is incredible" → 1.0
-  - "Just had the best day" → 0.95
-  - "Love this" → 0.9
-
-INCOMPLETE (score 0.0-0.4):
-✗ Ends mid-sentence/mid-thought
-✗ Obviously needs more words
-✗ Examples:
-  - "I think that" → 0.2
-  - "This is" → 0.1
-  - "Just had a great idea and" → 0.15
-  - "Going to" → 0.1
-
-Be GENEROUS with completeness scores. Short tweets are often intentionally brief.
-If it could be a tweet, score it 0.7+
-
-Respond with ONLY a number 0.0-1.0"""
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Text: \"{cleaned}\"\n\nCompleteness (0.0-1.0):"
-                    }
-                ],
-                temperature=0.2,
-                max_tokens=5
-            )
-            
-            result = response.choices[0].message.content.strip()
-            
-            # Parse the score
-            try:
-                score = float(result)
-                score = max(0.0, min(1.0, score))  # Clamp between 0 and 1
-                print(f"🤖 Completeness: {score:.2f} for '{cleaned[:50]}...'", flush=True)
-                return score
-            except:
-                # If can't parse, be generous
-                print(f"⚠️  Couldn't parse AI score, defaulting to 0.8", flush=True)
-                return 0.8
-                
+            result = await asyncio.to_thread(gemini_client.generate_text, prompt)
+            score = float(result.strip())
+            score = max(0.0, min(1.0, score))
+            print(f"INFO Completeness: {score:.2f} for '{cleaned[:50]}...'", flush=True)
+            return score
         except Exception as e:
-            print(f"⚠️  AI check failed: {e}, defaulting to complete", flush=True)
-            # On error, assume complete if reasonable length
+            print(f"WARN AI check failed: {e}, defaulting to complete", flush=True)
             return 0.9 if len(cleaned) > 8 else 0.5
     
     @classmethod
@@ -157,125 +165,90 @@ Respond with ONLY a number 0.0-1.0"""
         Extract the actual tweet from 3 segments of speech.
         AI intelligently determines what's the tweet vs what's not.
         """
+        prompt = f"""You extract the intended tweet from a voice transcript.
+
+    Assumption: The user said a trigger phrase and then kept talking.
+
+    Rules:
+    1. Extract only what should be posted
+    2. Remove side remarks or corrections
+    3. Remove filler words (um, uh, like, you know, etc.)
+    4. Fix grammar, punctuation, and capitalization
+    5. Keep it under 280 characters
+
+    Examples:
+    Input: "I think this is great, oh I forgot to buy milk"
+    Output: "I think this is great"
+
+    Input: "I had a new AI idea and it was really exciting"
+    Output: "I had a new AI idea. It was really exciting!"
+
+    Output ONLY the tweet text. No quotes or explanations.
+
+    Transcript: {all_segments_text}
+    Tweet:"""
+
         try:
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You extract tweets from voice transcripts.
+            cleaned = await asyncio.to_thread(gemini_client.generate_text, prompt)
+            cleaned = cleaned.strip()
 
-The user said "Tweet Now" and then spoke for a bit. Extract ONLY the tweet content.
-
-Rules:
-1. The tweet starts after "Tweet Now" trigger phrase
-2. Some speech may NOT be part of the tweet (side comments, corrections, etc.)
-3. Extract only what should be tweeted
-4. Clean up filler words (um, uh, like, you know)
-5. Fix grammar and capitalization
-6. Make it sound natural and well-written
-7. Keep under 280 characters
-
-Examples:
-
-Input: "that this is amazing and oh wait I also need to buy milk later"
-Output: "That this is amazing"
-
-Input: "I just had an incredible idea about AI and creativity this is so cool"
-Output: "I just had an incredible idea about AI and creativity. This is so cool!"
-
-Input: "the best day ever no wait scratch that it was pretty good"
-Output: "The best day ever"
-
-Respond with ONLY the cleaned tweet text. No quotes, no explanations."""
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Voice transcript after 'Tweet Now': {all_segments_text}\n\nExtract the tweet:"
-                    }
-                ],
-                temperature=0.3,
-                max_tokens=150
-            )
-            
-            cleaned = response.choices[0].message.content.strip()
-            
-            # Remove quotes if AI added them
             if cleaned.startswith('"') and cleaned.endswith('"'):
                 cleaned = cleaned[1:-1]
             if cleaned.startswith("'") and cleaned.endswith("'"):
                 cleaned = cleaned[1:-1]
-            
-            # Ensure proper capitalization
+
             if cleaned and cleaned[0].islower():
                 cleaned = cleaned[0].upper() + cleaned[1:]
-            
-            # Truncate if too long
+
             if len(cleaned) > 280:
                 cleaned = cleaned[:277] + "..."
-            
+
             return cleaned
-            
+
         except Exception as e:
-            print(f"⚠️  AI extraction failed: {e}, using basic cleanup", flush=True)
-            # Fallback
+            print(f"WARN AI extraction failed: {e}, using basic cleanup", flush=True)
             return cls.clean_tweet_content(all_segments_text)
     
     @classmethod
     async def ai_clean_tweet(cls, full_text: str, extracted_content: str) -> str:
         """
-        Use OpenAI to intelligently clean and extract the tweet.
+        Use Gemini to clean and refine the tweet text.
         Takes the full transcript and extracted content, returns cleaned tweet.
         """
+        prompt = f"""You are a tweet cleanup assistant.
+
+    Your job:
+    1. Make it a natural, readable tweet
+    2. Remove filler words
+    3. Fix grammar, punctuation, and capitalization
+    4. Keep it under 280 characters
+    5. Preserve the original meaning and tone
+
+    Output ONLY the cleaned tweet text.
+
+    Full transcript: {full_text}
+    Extracted content: {extracted_content}
+    Tweet:"""
+
         try:
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are a tweet cleanup assistant. Extract and clean up the intended tweet from speech.
+            cleaned = await asyncio.to_thread(gemini_client.generate_text, prompt)
+            cleaned = cleaned.strip()
 
-Your job:
-1. Extract ONLY the tweet content (what comes after "Tweet Now")
-2. Remove filler words (um, uh, like, you know, so)
-3. Fix capitalization and punctuation
-4. Remove leading/trailing punctuation artifacts
-5. Make it sound natural and well-written
-6. Keep it under 280 characters
-7. Preserve the original meaning and tone
-
-Respond with ONLY the cleaned tweet text. No quotes, no explanations, just the tweet."""
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Full transcript: {full_text}\n\nExtracted after trigger: {extracted_content}\n\nClean this into a perfect tweet:"
-                    }
-                ],
-                temperature=0.3,
-                max_tokens=100
-            )
-            
-            cleaned = response.choices[0].message.content.strip()
-            
-            # Remove quotes if AI added them
             if cleaned.startswith('"') and cleaned.endswith('"'):
                 cleaned = cleaned[1:-1]
             if cleaned.startswith("'") and cleaned.endswith("'"):
                 cleaned = cleaned[1:-1]
-            
-            # Ensure proper capitalization
+
             if cleaned and cleaned[0].islower():
                 cleaned = cleaned[0].upper() + cleaned[1:]
-            
-            # Truncate if too long
+
             if len(cleaned) > 280:
                 cleaned = cleaned[:277] + "..."
-            
+
             return cleaned
-            
+
         except Exception as e:
-            print(f"⚠️  AI cleanup failed: {e}, using basic cleanup")
-            # Fallback to basic cleaning
+            print(f"WARN AI cleanup failed: {e}, using basic cleanup")
             return cls.clean_tweet_content(extracted_content)
     
     @classmethod

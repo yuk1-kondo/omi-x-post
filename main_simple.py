@@ -11,15 +11,15 @@ from simple_storage import SimpleUserStorage, SimpleSessionStorage, OAuthStateSt
 from twitter_client import TwitterClient
 from tweet_detector import TweetDetector
 
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 # Initialize services
 twitter_client = TwitterClient()
 tweet_detector = TweetDetector()
 
 app = FastAPI(
-    title="OMI Twitter Integration",
-    description="Real-time Twitter posting via OMI voice commands",
+    title="OMI X Integration",
+    description="Real-time X posting via OMI voice commands",
     version="1.0.0"
 )
 
@@ -99,58 +99,59 @@ async def root(uid: str = Query(None)):
             </head>
             <body>
                 <div class="container">
-                    <div class="icon">🐦✨</div>
-                    <h1>Twitter Voice Poster</h1>
-                    <p>Tweet with your voice using OMI!</p>
+                    <div class="icon">X</div>
+                    <h1>X Voice Posting</h1>
+                    <p>Talk to OMI to post on X in real time.</p>
                     
-                    <a href="{auth_url}" class="btn">🔐 Connect Twitter Account</a>
+                    <a href="{auth_url}" class="btn">Connect X Account</a>
                     
                     <div class="step">
-                        <h3>📱 How to Use</h3>
-                        <p>After connecting your Twitter account:</p>
+                        <h3>How it works</h3>
+                        <p>After connecting your X account:</p>
                         <ol>
-                            <li>Say <strong>"Tweet Now"</strong> to your OMI device</li>
-                            <li>Speak your tweet naturally</li>
-                            <li>AI automatically detects when you're done</li>
-                            <li>Your tweet is posted instantly! 🚀</li>
+                            <li>Say <strong>"X now"</strong> to OMI</li>
+                            <li>Speak your message naturally</li>
+                            <li>AI cleans it into a tweet</li>
+                            <li>It posts to X automatically</li>
                         </ol>
                     </div>
                     
                     <div class="step">
-                        <h3>💬 Examples</h3>
+                        <h3>Examples</h3>
                         <div class="example">
-                            "Tweet Now, Just had an amazing conversation about AI and creativity!"
+                            "X now, talking with AI today was amazing."
                         </div>
                         <div class="example">
-                            "Tweet Now, Beautiful sunset today. This is incredible. End tweet."
+                            "X now, the sunset was beautiful. That's it."
                         </div>
                         <div class="example">
-                            "Post Tweet, Excited to share my new project with the world!"
+                            "Post to X, excited to share my new project."
                         </div>
                     </div>
                     
                     <div class="step">
-                        <h3>🎯 Trigger Phrases</h3>
+                        <h3>Trigger phrases</h3>
                         <ul>
-                            <li>"Tweet Now"</li>
-                            <li>"Post Tweet"</li>
-                            <li>"Send Tweet"</li>
-                            <li>"Tweet This"</li>
+                            <li>"X now"</li>
+                            <li>"Post tweet"</li>
+                            <li>"Send tweet"</li>
+                            <li>"Tweet this"</li>
+                            <li>"Post to X"</li>
                         </ul>
                     </div>
                     
                     <div class="step">
-                        <h3>💡 Pro Tips</h3>
+                        <h3>Tips</h3>
                         <ul>
-                            <li>Speak naturally - AI cleans up filler words</li>
-                            <li>Say "End tweet" to finish explicitly</li>
-                            <li>Natural pauses are detected automatically</li>
-                            <li>Works best with 1-2 sentence tweets</li>
+                            <li>Natural speech is fine ? AI will clean it up.</li>
+                            <li>If you want to end, say "that's it".</li>
+                            <li>Short pauses are OK.</li>
+                            <li>1?2 sentences work best.</li>
                         </ul>
                     </div>
                     
                     <p style="text-align: center; color: #666; margin-top: 30px;">
-                        Made with ❤️ for the OMI community
+                        Made with love for the OMI community
                     </p>
                 </div>
             </body>
@@ -159,7 +160,7 @@ async def root(uid: str = Query(None)):
     
     # Default API info
     return {
-        "app": "OMI Twitter Integration",
+        "app": "OMI X Integration",
         "version": "1.0.0",
         "status": "active",
         "storage": "in-memory (simple mode)",
@@ -173,7 +174,7 @@ async def root(uid: str = Query(None)):
 
 @app.get("/auth")
 async def auth_start(uid: str = Query(..., description="User ID from OMI")):
-    """Start OAuth flow for Twitter authentication."""
+    """Start OAuth flow for X authentication."""
     redirect_uri = os.getenv("OAUTH_REDIRECT_URL", "http://localhost:8000/auth/callback")
     
     try:
@@ -195,14 +196,14 @@ async def auth_callback(
     state: str = Query(None),
     code: str = Query(None)
 ):
-    """Handle OAuth callback from Twitter."""
+    """Handle OAuth callback from X."""
     if not code:
         return HTMLResponse(
             content="""
             <html>
                 <body style="font-family: Arial; padding: 40px; text-align: center;">
-                    <h2>❌ Authentication Failed</h2>
-                    <p>Authorization code not received. Please try again.</p>
+                    <h2>Authentication failed</h2>
+                    <p>We couldn't retrieve the authorization code. Please try again.</p>
                 </body>
             </html>
             """,
@@ -221,8 +222,11 @@ async def auth_callback(
         access_token = token_data.get('access_token')
         refresh_token = token_data.get('refresh_token')
         expires_in = token_data.get('expires_in', 7200)
+
+        if not access_token:
+            raise HTTPException(status_code=500, detail="OAuth failed: access_token missing")
         
-        print(f"🔑 Token data received:", flush=True)
+        print("INFO Token data received:", flush=True)
         print(f"   Access token: {access_token[:20]}..." if access_token else "   Access token: None", flush=True)
         print(f"   Refresh token: {refresh_token[:20]}..." if refresh_token else "   Refresh token: None", flush=True)
         print(f"   Expires in: {expires_in}s ({expires_in/3600:.1f}h)", flush=True)
@@ -241,7 +245,7 @@ async def auth_callback(
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-                    <title>Twitter • Account Connected</title>
+                    <title>X - Account Connected</title>
                     <style>
                         * {
                             margin: 0;
@@ -258,7 +262,7 @@ async def auth_callback(
                         }
                         
                         .header {
-                            padding: 16px 20px;
+                    print("INFO Token data received:", flush=True)
                             border-bottom: 1px solid #EFF3F4;
                             display: flex;
                             align-items: center;
@@ -465,55 +469,55 @@ async def auth_callback(
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
                             </div>
-                            <h1>You're connected!</h1>
+                            <h1>Connected successfully</h1>
                         </div>
                         
                         <div class="info-card">
                             <div class="info-title">How to use</div>
                             
                             <div class="step">
-                                <div class="step-icon">🎤</div>
+                                <div class="step-icon">1</div>
                                 <div class="step-content">
-                                    <div class="step-text">Say <strong>"Tweet Now"</strong> to your OMI device</div>
+                                    <div class="step-text">Say <strong>"X now"</strong> to OMI</div>
                                 </div>
                             </div>
                             
                             <div class="step">
-                                <div class="step-icon">💬</div>
+                                <div class="step-icon">2</div>
                                 <div class="step-content">
                                     <div class="step-text">Speak your message naturally</div>
                                 </div>
                             </div>
                             
                             <div class="step">
-                                <div class="step-icon">✨</div>
+                                <div class="step-icon">3</div>
                                 <div class="step-content">
-                                    <div class="step-text">AI cleans up your speech and posts it</div>
+                                    <div class="step-text">AI cleans it into a tweet</div>
                                 </div>
                             </div>
                             
                             <div class="step">
-                                <div class="step-icon">📲</div>
+                                <div class="step-icon">4</div>
                                 <div class="step-content">
-                                    <div class="step-text">Get notified when your tweet is live!</div>
+                                    <div class="step-text">You'll be notified when it posts</div>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="example-card">
-                            <div class="example-label">Try saying</div>
+                            <div class="example-label">Example</div>
                             <div class="tweet-example">
-                                <div class="tweet-text">Tweet Now, I just had an incredible idea about voice-first social media!</div>
+                                <div class="tweet-text">X now, voice-first social apps have huge potential.</div>
                                 <div class="tweet-meta">
-                                    <span>🤖</span>
-                                    <span>AI will clean and post this automatically</span>
+                                    <span>Draft</span>
+                                    <span>AI will polish and post automatically</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
                     <div class="footer">
-                        <p>Powered by <a href="https://omi.me" target="_blank">OMI</a> • Made with ❤️</p>
+                        <p>Powered by <a href="https://omi.me" target="_blank">OMI</a> ? Made with love</p>
                     </div>
                 </body>
             </html>
@@ -526,8 +530,8 @@ async def auth_callback(
             content=f"""
             <html>
                 <body style="font-family: Arial; padding: 40px; text-align: center;">
-                    <h2>❌ Authentication Error</h2>
-                    <p>Failed to complete authentication: {str(e)}</p>
+                    <h2>Authentication error</h2>
+                    <p>Authentication failed: {str(e)}</p>
                     <p><a href="/auth?uid={error_uid}">Try again</a></p>
                 </body>
             </html>
@@ -538,7 +542,7 @@ async def auth_callback(
 
 @app.get("/setup-completed")
 async def check_setup(uid: str = Query(..., description="User ID from OMI")):
-    """Check if user has completed setup (authenticated with Twitter)."""
+    """Check if user has completed setup (authenticated with X)."""
     is_setup = SimpleUserStorage.is_authenticated(uid)
     return {"is_setup_completed": is_setup}
 
@@ -554,18 +558,16 @@ async def webhook(
     Real-time transcript webhook endpoint.
     Handles requests with or without session_id parameter.
     """
-    # Use consistent session_id per user (no timestamp!)
-    # This ensures session persists across all segments
-    if not session_id:
-        session_id = f"omi_session_{uid}"
-    
+    # Fix for malformed URLs where uid is appended twice (e.g., ?uid=... ?uid=...)
+    if uid and "?uid=" in uid:
+        uid = uid.split("?uid=")[0]
     # Get user
     user = SimpleUserStorage.get_user(uid)
     
     if not user or not user.get("access_token"):
         return JSONResponse(
             content={
-                "message": "User not authenticated. Please complete setup first.",
+                "message": "Not authenticated. Please complete setup in the OMI app.",
                 "setup_required": True
             },
             status_code=401
@@ -573,16 +575,16 @@ async def webhook(
     
     # Check if token needs refresh
     if SimpleUserStorage.is_token_expired(uid):
-        print(f"🔄 Token expired for user {uid[:10]}...", flush=True)
+        print(f"INFO Token expired for user {uid[:10]}...", flush=True)
         
         # Check if we have a valid refresh token
         refresh_token = user.get("refresh_token")
         
         if not refresh_token or refresh_token == "null":
-            print(f"⚠️  No refresh token! User must re-authenticate with offline.access scope.", flush=True)
+            print("WARN No refresh token! User must re-authenticate with offline.access scope.", flush=True)
             return JSONResponse(
                 content={
-                    "message": "🔄 Your session expired. Please re-authenticate in the OMI app to continue tweeting.",
+                    "message": "Session expired. Please re-authenticate in the OMI app.",
                     "setup_required": True
                 },
                 status_code=401
@@ -590,34 +592,40 @@ async def webhook(
         
         # Try to refresh
         try:
-            print(f"🔄 Refreshing token...", flush=True)
+            print("INFO Refreshing token...", flush=True)
             new_token_data = twitter_client.refresh_access_token(refresh_token)
+
+            new_access_token = new_token_data.get("access_token")
+            if not new_access_token:
+                raise Exception("Token refresh failed: access_token missing")
             
             # Save new tokens
             SimpleUserStorage.save_user(
                 uid=uid,
-                access_token=new_token_data.get("access_token"),
+                access_token=new_access_token,
                 refresh_token=new_token_data.get("refresh_token", refresh_token),
                 expires_in=new_token_data.get("expires_in", 7200)
             )
             
             # Update user reference
             user = SimpleUserStorage.get_user(uid)
-            print(f"✅ Token refreshed!", flush=True)
+            print("INFO Token refreshed!", flush=True)
             
         except Exception as e:
-            print(f"❌ Refresh error: {e}", flush=True)
+            print(f"ERROR Refresh error: {e}", flush=True)
             # Delete old invalid token
             del users[uid]
             save_users()
             return JSONResponse(
                 content={
-                    "message": "🔄 Session expired. Please re-authenticate in the OMI app.",
+                    "message": "Session expired. Please re-authenticate in the OMI app.",
                     "setup_required": True
                 },
                 status_code=401
             )
     
+    assert user is not None
+
     # Parse payload from OMI
     try:
         payload = await request.json()
@@ -639,7 +647,7 @@ async def webhook(
         segments = payload
     
     # Log what we received for debugging
-    print(f"📥 Received {len(segments) if segments else 0} segment(s) from OMI", flush=True)
+    print(f"INFO Received {len(segments) if segments else 0} segment(s) from OMI", flush=True)
     if segments:
         for i, seg in enumerate(segments[:3]):  # Show first 3
             text = seg.get('text', 'NO TEXT') if isinstance(seg, dict) else str(seg)
@@ -658,15 +666,15 @@ async def webhook(
     session = SimpleSessionStorage.get_or_create_session(session_id, uid)
     
     # Debug: show current session state
-    print(f"📊 Session state: mode={session.get('tweet_mode')}, count={session.get('segments_count', 0)}", flush=True)
+    print(f"INFO Session state: mode={session.get('tweet_mode')}, count={session.get('segments_count', 0)}", flush=True)
     
     # Process segments
     response_message = await process_segments(session, segments, user)
     
     # Only send notifications for final tweet post (success or failure)
     # Silent responses during collection so user doesn't get spammed
-    if response_message and ("✅ Tweet posted:" in response_message or "❌ Failed:" in response_message):
-        print(f"✉️  USER NOTIFICATION: {response_message}", flush=True)
+    if response_message and ("Posted to X:" in response_message or "Post failed:" in response_message):
+        print(f"INFO USER NOTIFICATION: {response_message}", flush=True)
         return {
             "message": response_message,
             "session_id": session_id,
@@ -674,7 +682,7 @@ async def webhook(
         }
     
     # Silent response for everything else (listening, collecting, etc.)
-    print(f"🔇 Silent response: {response_message}", flush=True)
+    print(f"DEBUG Silent response: {response_message}", flush=True)
     return {"status": "ok"}
 
 
@@ -684,11 +692,12 @@ async def process_segments(
     user: dict
 ) -> str:
     """
-    ALWAYS collect exactly 3 segments after 'Tweet Now', then AI extracts the tweet.
-    - Segment 1: Contains "Tweet Now" + start of tweet
+    Collect exactly 3 segments after a trigger phrase, then use AI to
+    extract and clean the final tweet.
+    - Segment 1: Trigger phrase + start of tweet
     - Segment 2: Middle part (auto-collected)
     - Segment 3: End part (auto-collected)
-    - AI decides what's actually the tweet and cleans it
+    - AI decides what the tweet should be and cleans it
     """
     
     # Extract text from segments
@@ -697,65 +706,118 @@ async def process_segments(
     
     session_id = session["session_id"]
     
-    print(f"🔍 Received: '{full_text}'", flush=True)
-    print(f"📊 Session mode: {session['tweet_mode']}, Count: {session.get('segments_count', 0)}/3", flush=True)
-    
+    required_segments = int(os.getenv("SEGMENTS_REQUIRED", "3"))
+
+    print(f"INFO Received: '{full_text}'", flush=True)
+    print(
+        f"INFO Session mode: {session['tweet_mode']}, Count: {session.get('segments_count', 0)}/{required_segments}",
+        flush=True
+    )
+
+    def ensure_hashtags(text: str) -> str:
+        required = ["#omi", "#omi�A�v�����瓊�e", "#PostfromOmi"]
+        existing = {tag.lower() for tag in text.split() if tag.startswith("#")}
+        missing = [tag for tag in required if tag.lower() not in existing]
+        if not missing:
+            return text
+        suffix = " " + " ".join(missing)
+        if len(text) + len(suffix) <= 280:
+            return text + suffix
+        # Trim to fit 280 chars
+        trimmed = text[: max(0, 280 - len(suffix))].rstrip()
+        return trimmed + suffix
+
     # Check for trigger phrase
     if tweet_detector.detect_trigger(full_text):
-        tweet_content = tweet_detector.extract_tweet_content(full_text)
+        tweet_content = tweet_detector.extract_tweet_content(full_text) or ""
         
-        print(f"🎤 TRIGGER! Starting 3-segment collection...", flush=True)
+        print(f"INFO TRIGGER! Starting {required_segments}-segment collection...", flush=True)
         print(f"   Segment 1 content: '{tweet_content}'", flush=True)
         
-        # Start collecting - ALWAYS wait for 2 more segments
+        if required_segments <= 1:
+            if not tweet_content.strip():
+                # Trigger only, no content yet: wait for the next segment
+                SimpleSessionStorage.update_session(
+                    session_id,
+                    tweet_mode="recording",
+                    accumulated_text="",
+                    segments_count=0
+                )
+                return "collecting_0"
+
+            cleaned_content = await tweet_detector.ai_extract_tweet_from_segments(tweet_content)
+
+            print(f"INFO AI extracted tweet: '{cleaned_content}'", flush=True)
+
+            if len(cleaned_content.strip()) > 3:
+                cleaned_content = ensure_hashtags(cleaned_content)
+                print("INFO Posting to X...", flush=True)
+                result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
+
+                if result and result.get("success"):
+                    SimpleSessionStorage.reset_session(session_id)
+                    print(f"INFO SUCCESS! Tweet ID: {result.get('tweet_id')}", flush=True)
+                    return f"Posted to X: '{cleaned_content}'"
+                else:
+                    error = result.get("error", "Unknown") if result else "Failed"
+                    SimpleSessionStorage.reset_session(session_id)
+                    print(f"ERROR FAILED: {error}", flush=True)
+                    return f"Post failed: {error}"
+            else:
+                SimpleSessionStorage.reset_session(session_id)
+                print("WARN AI returned empty tweet", flush=True)
+                return "No valid tweet content"
+
+        # Start collecting - wait for more segments
         SimpleSessionStorage.update_session(
             session_id,
             tweet_mode="recording",
             accumulated_text=tweet_content,
             segments_count=1
         )
-        
+
         # Silent - don't notify user yet
         return "collecting_1"
     
     # If in recording mode, collect more segments
     elif session["tweet_mode"] == "recording":
-        accumulated = session.get("accumulated_text", "")
+        accumulated = session.get("accumulated_text", "") or ""
         segments_count = session.get("segments_count", 0)
         
         # Add this segment
         accumulated += " " + full_text
         segments_count += 1
         
-        print(f"📝 Segment {segments_count}/3: '{full_text}'", flush=True)
-        print(f"📚 Full accumulated: '{accumulated[:150]}...'", flush=True)
+        print(f"INFO Segment {segments_count}/{required_segments}: '{full_text}'", flush=True)
+        print(f"INFO Full accumulated: '{accumulated[:150]}...'", flush=True)
         
-        # Always collect 3 segments
-        if segments_count >= 3:
-            print(f"✅ Got all 3 segments! Sending to AI...", flush=True)
+        # Collect required number of segments
+        if segments_count >= required_segments:
+            print(f"INFO Got all {required_segments} segments! Sending to AI...", flush=True)
             
             # AI extracts the actual tweet from all 3 segments
             cleaned_content = await tweet_detector.ai_extract_tweet_from_segments(accumulated)
             
-            print(f"✨ AI extracted tweet: '{cleaned_content}'", flush=True)
+            print(f"INFO AI extracted tweet: '{cleaned_content}'", flush=True)
             
             if len(cleaned_content.strip()) > 3:
-                print(f"📤 Posting to Twitter...", flush=True)
+                cleaned_content = ensure_hashtags(cleaned_content)
+                print("INFO Posting to X...", flush=True)
                 result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
                 
                 if result and result.get("success"):
                     SimpleSessionStorage.reset_session(session_id)
-                    print(f"🎉 SUCCESS! Tweet ID: {result.get('tweet_id')}", flush=True)
-                    return f"✅ Tweet posted: '{cleaned_content}'"
+                    print(f"INFO SUCCESS! Tweet ID: {result.get('tweet_id')}", flush=True)
+                    return f"Posted to X: '{cleaned_content}'"
                 else:
                     error = result.get("error", "Unknown") if result else "Failed"
                     SimpleSessionStorage.reset_session(session_id)
-                    print(f"❌ FAILED: {error}", flush=True)
-                    return f"❌ Failed: {error}"
+                    print(f"ERROR FAILED: {error}", flush=True)
+                    return f"Post failed: {error}"
             else:
                 SimpleSessionStorage.reset_session(session_id)
-                print(f"⚠️  AI returned empty tweet", flush=True)
-                return "❌ No valid tweet content"
+                print("WARN AI returned empty tweet", flush=True)
+                return "No valid tweet content"
         else:
             # Still collecting (need segment 2 or 3)
             SimpleSessionStorage.update_session(
@@ -777,7 +839,7 @@ async def test_interface():
     <html>
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>Twitter Voice Poster - Test Interface</title>
+        <title>X Voice Posting - Test Console</title>
             <style>
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
@@ -929,8 +991,8 @@ async def test_interface():
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🐦 Twitter Voice Poster - Test Interface</h1>
-                    <p>Test your voice commands without using OMI device</p>
+                    <h1>X Voice Posting - Test Console</h1>
+                    <p>Test voice commands without using the OMI app.</p>
                     <div>
                         <span class="auth-status" id="authStatus">Checking...</span>
                     </div>
@@ -942,37 +1004,37 @@ async def test_interface():
                         <label for="uid">User ID (UID):</label>
                         <input type="text" id="uid" placeholder="Enter your OMI user ID" value="test_user_123">
                     </div>
-                    <button class="btn" onclick="authenticate()">🔐 Authenticate Twitter</button>
-                    <button class="btn btn-secondary" onclick="checkAuth()">🔍 Check Auth Status</button>
+                    <button class="btn" onclick="authenticate()">Open X Auth</button>
+                    <button class="btn btn-secondary" onclick="checkAuth()">Check Auth Status</button>
                 </div>
 
                 <div class="card">
-                    <h2>Test Voice Commands</h2>
+                    <h2>Voice Command Test</h2>
                     <div class="input-group">
-                        <label for="voiceInput">What would you say to OMI:</label>
-                        <textarea id="voiceInput" placeholder='Example: "Tweet Now, Just had an amazing idea about AI and creativity!"'></textarea>
+                        <label for="voiceInput">What you say to OMI:</label>
+                        <textarea id="voiceInput" placeholder='Example: "X now, AI ideas are amazing today."'></textarea>
                     </div>
-                    <button class="btn" onclick="sendCommand()">🎤 Send Command</button>
-                    <button class="btn btn-secondary" onclick="clearLogs()">🗑️ Clear Logs</button>
+                    <button class="btn" onclick="sendCommand()">Send</button>
+                    <button class="btn btn-secondary" onclick="clearLogs()">Clear Logs</button>
                     
                     <div id="status" class="status idle">
-                        Status: Ready
+                        Status: idle
                     </div>
                 </div>
 
                 <div class="card">
-                    <h3>Quick Examples (Click to use)</h3>
+                    <h3>Quick examples (click to insert)</h3>
                     <div class="example" onclick="useExample(this)">
-                        Tweet Now, Just launched my new AI project and it's incredible!
+                        X now, I just had a great idea about AI products.
                     </div>
                     <div class="example" onclick="useExample(this)">
-                        Tweet Now, Beautiful sunset today. Nature never stops amazing me. End tweet.
+                        X now, the sunset was stunning today. That's it.
                     </div>
                     <div class="example" onclick="useExample(this)">
-                        Post Tweet, Excited to share my thoughts on the future of voice interfaces!
+                        Post to X, thinking about the future of voice interfaces.
                     </div>
                     <div class="example" onclick="useExample(this)">
-                        Tweet Now, Sometimes the best ideas come when you least expect them.
+                        X now, the best ideas show up at unexpected times.
                     </div>
                 </div>
 
@@ -1008,42 +1070,42 @@ async def test_interface():
                 async function checkAuth() {
                     const uid = document.getElementById('uid').value;
                     if (!uid) {
-                        alert('Please enter a User ID');
+                        alert('Please enter a user ID');
                         return;
                     }
                     
                     try {
-                        addLog('Checking authentication status...');
+                        addLog('Checking auth status...');
                         const response = await fetch(`/setup-completed?uid=${uid}`);
                         const data = await response.json();
                         
                         const authStatus = document.getElementById('authStatus');
                         if (data.is_setup_completed) {
-                            authStatus.textContent = '✅ Connected';
+                            authStatus.textContent = 'Connected';
                             authStatus.className = 'auth-status connected';
-                            addLog('✅ Twitter account is connected!', 'success');
+                            addLog('X account is connected.', 'success');
                         } else {
-                            authStatus.textContent = '❌ Not Connected';
+                            authStatus.textContent = 'Not connected';
                             authStatus.className = 'auth-status disconnected';
-                            addLog('❌ Twitter account not connected. Please authenticate.', 'error');
+                            addLog('X account is not connected. Please authenticate.', 'error');
                         }
                     } catch (error) {
-                        addLog('❌ Error checking auth: ' + error.message, 'error');
+                        addLog('Auth check error: ' + error.message, 'error');
                     }
                 }
                 
                 function authenticate() {
                     const uid = document.getElementById('uid').value;
                     if (!uid) {
-                        alert('Please enter a User ID');
+                        alert('Please enter a user ID');
                         return;
                     }
                     
-                    addLog('Opening Twitter authentication...');
+                    addLog('Opening X authorization page...');
                     window.open(`/auth?uid=${uid}`, '_blank');
                     
                     setTimeout(() => {
-                        addLog('After authenticating, click "Check Auth Status" to verify.');
+                        addLog('After auth, click "Check Auth Status".');
                     }, 1000);
                 }
                 
@@ -1052,12 +1114,12 @@ async def test_interface():
                     const voiceInput = document.getElementById('voiceInput').value;
                     
                     if (!uid || !voiceInput) {
-                        alert('Please enter both User ID and voice command');
+                        alert('Please enter both user ID and voice command');
                         return;
                     }
                     
-                    setStatus('🎤 Processing command...', 'recording');
-                    addLog('📤 Sending: "' + voiceInput + '"');
+                    setStatus('Processing...', 'recording');
+                    addLog('Send: "' + voiceInput + '"');
                     
                     try {
                         // Simulate transcript segments
@@ -1081,34 +1143,37 @@ async def test_interface():
                         const data = await response.json();
                         
                         if (response.ok) {
-                            if (data.message.includes('✅')) {
+                            if (data.message && data.message.includes('Posted to X:')) {
                                 setStatus(data.message, 'success');
-                                addLog('✅ ' + data.message, 'success');
-                            } else if (data.message.includes('❌')) {
+                                addLog(data.message, 'success');
+                            } else if (data.message && data.message.includes('Post failed:')) {
                                 setStatus(data.message, 'error');
-                                addLog('❌ ' + data.message, 'error');
-                            } else {
+                                addLog(data.message, 'error');
+                            } else if (data.message) {
                                 setStatus(data.message, 'recording');
-                                addLog('📝 ' + data.message);
+                                addLog(data.message);
+                            } else {
+                                setStatus('Listening...', 'recording');
+                                addLog('Listening...');
                             }
                         } else {
-                            setStatus('❌ Error: ' + data.message, 'error');
-                            addLog('❌ Error: ' + data.message, 'error');
+                            setStatus('Error: ' + data.message, 'error');
+                            addLog('Error: ' + data.message, 'error');
                         }
                     } catch (error) {
-                        setStatus('❌ Error sending command', 'error');
-                        addLog('❌ Network error: ' + error.message, 'error');
+                        setStatus('Send error', 'error');
+                        addLog('Network error: ' + error.message, 'error');
                     }
                 }
                 
                 function useExample(element) {
                     document.getElementById('voiceInput').value = element.textContent.trim();
-                    addLog('📝 Example loaded: "' + element.textContent.trim() + '"');
+                    addLog('Loaded example: "' + element.textContent.trim() + '"');
                 }
                 
                 function clearLogs() {
                     document.getElementById('log').innerHTML = '<div class="log-entry"><span class="timestamp">Cleared</span><span>Logs cleared</span></div>';
-                    setStatus('Status: Ready', 'idle');
+                    setStatus('Status: idle', 'idle');
                 }
                 
                 // Check auth on load
@@ -1124,7 +1189,7 @@ async def test_interface():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "omi-twitter-integration"}
+    return {"status": "healthy", "service": "omi-x-integration"}
 
 
 if __name__ == "__main__":
@@ -1132,11 +1197,11 @@ if __name__ == "__main__":
     port = int(os.getenv("APP_PORT", 8000))
     host = os.getenv("APP_HOST", "0.0.0.0")
     
-    print("🐦 OMI Twitter Integration - Simple Mode")
+    print("OMI X Integration - Simple Mode")
     print("=" * 50)
-    print("✅ Using in-memory storage (no database)")
-    print(f"🚀 Starting on {host}:{port}")
-    print("⚠️  Note: Data resets when server restarts")
+    print("Using in-memory storage (no database)")
+    print(f"Starting on {host}:{port}")
+    print("Note: Data resets when server restarts")
     print("=" * 50)
     
     uvicorn.run(
