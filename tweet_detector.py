@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import re
 from typing import Optional
@@ -165,23 +166,22 @@ class TweetDetector:
         Extract the actual tweet from 3 segments of speech.
         AI intelligently determines what's the tweet vs what's not.
         """
-        prompt = f"""You extract the intended tweet from a voice transcript.
+        prompt = f"""You extract the intended tweet from a voice transcript in Japanese.
 
     Assumption: The user said a trigger phrase and then kept talking.
 
     Rules:
     1. Extract only what should be posted
-    2. Remove side remarks or corrections
+    2. Remove side remarks, false starts, or corrections
     3. Remove filler words (um, uh, like, you know, etc.)
     4. Fix grammar, punctuation, and capitalization
-    5. Keep it under 280 characters
+    5. If the sentence is cut off, complete it naturally (e.g., "\u5c31\u5bdd\u3059" -> "\u5c31\u5bdd\u3057\u307e\u3059")
+    6. Keep it under 280 characters
+    7. Always render "\u304a\u307f" or "\u30aa\u30df" as "Omi"
 
     Examples:
-    Input: "I think this is great, oh I forgot to buy milk"
-    Output: "I think this is great"
-
-    Input: "I had a new AI idea and it was really exciting"
-    Output: "I had a new AI idea. It was really exciting!"
+    Input: "\u4eca\u65e5\u306f\u3082\u3046\u5c31\u5bdd\u3059"
+    Output: "\u4eca\u65e5\u306f\u3082\u3046\u5c31\u5bdd\u3057\u307e\u3059\u3002"
 
     Output ONLY the tweet text. No quotes or explanations.
 
@@ -223,6 +223,7 @@ class TweetDetector:
     3. Fix grammar, punctuation, and capitalization
     4. Keep it under 280 characters
     5. Preserve the original meaning and tone
+    6. Always render "\u304a\u307f" or "\u30aa\u30df" as "Omi"
 
     Output ONLY the cleaned tweet text.
 

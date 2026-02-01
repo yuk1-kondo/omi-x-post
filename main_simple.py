@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 import os
@@ -715,7 +716,7 @@ async def process_segments(
     )
 
     def ensure_hashtags(text: str) -> str:
-        required = ["#omi", "#omiƒAƒvƒŠ‚©‚ç“Še", "#PostfromOmi"]
+        required = ["#omi", "#omi\u30a2\u30d7\u30ea\u304b\u3089\u6295\u7a3f", "#PostfromOmi"]
         existing = {tag.lower() for tag in text.split() if tag.startswith("#")}
         missing = [tag for tag in required if tag.lower() not in existing]
         if not missing:
@@ -749,7 +750,7 @@ async def process_segments(
 
             print(f"INFO AI extracted tweet: '{cleaned_content}'", flush=True)
 
-            if len(cleaned_content.strip()) > 3:
+            if cleaned_content.strip():
                 cleaned_content = ensure_hashtags(cleaned_content)
                 print("INFO Posting to X...", flush=True)
                 result = await twitter_client.post_tweet(user["access_token"], cleaned_content)
@@ -800,7 +801,7 @@ async def process_segments(
             
             print(f"INFO AI extracted tweet: '{cleaned_content}'", flush=True)
             
-            if len(cleaned_content.strip()) > 3:
+            if cleaned_content.strip():
                 cleaned_content = ensure_hashtags(cleaned_content)
                 print("INFO Posting to X...", flush=True)
                 result = await twitter_client.post_tweet(user["access_token"], cleaned_content)

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Simple storage with file persistence - survives server restarts!
 Note: For production, use a proper database
